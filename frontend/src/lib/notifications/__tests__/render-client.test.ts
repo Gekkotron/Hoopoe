@@ -7,7 +7,10 @@ const HIDDEN = { hideAmount: true, hideMerchant: true };
 
 describe('renderTitle — one per NotificationKind', () => {
   it.each<[NotificationPayload, string]>([
-    [{ kind: 'big_transaction', single: { txId: 1, accountId: 1, amount: -100, merchant: null } }, 'Big transaction'],
+    [{ kind: 'big_transaction', single: { txId: 1, accountId: 1, amount: -100, merchant: null } }, 'Big debit'],
+    [{ kind: 'big_transaction', single: { txId: 1, accountId: 1, amount: 100, merchant: null } }, 'Big credit'],
+    [{ kind: 'big_transaction', summary: { accountId: 1, count: 2, total: 300, direction: 'credit' } }, 'Big credit'],
+    [{ kind: 'big_transaction', summary: { accountId: 1, count: 2, total: 300 } }, 'Big transaction'],
     [{ kind: 'account_low', accountId: 1, balance: 5, floor: 100 }, 'Account balance low'],
     [{ kind: 'envelope_exceeded', categoryId: 1, envelope: 100, spent: 150, month: '2026-09' }, 'Budget exceeded'],
     [{ kind: 'bank_sync_failed', accountId: 1, reason: 'auth' }, 'Bank sync failed'],
@@ -74,6 +77,13 @@ describe('renderBody — big_transaction', () => {
     expect(body).not.toMatch(/500,00/);
     expect(body).toContain('account #4');
   });
+
+  it('summary with a direction: names debit/credit and signs the total', () => {
+    expect(renderBody({ kind: 'big_transaction', summary: { accountId: 4, accountName: 'Livret', count: 1, total: 200, direction: 'credit' } }, OPEN))
+      .toMatch(/^1 big credit on Livret \(\+200/);
+    expect(renderBody({ kind: 'big_transaction', summary: { accountId: 4, accountName: 'Livret', count: 2, total: 500, direction: 'debit' } }, OPEN))
+      .toMatch(/^2 big debits on Livret \(−500/);
+  });
 });
 
 describe('renderBody — remaining kinds', () => {
@@ -136,7 +146,7 @@ describe('renderFullDetail', () => {
       single: { txId: 1, accountId: 4, accountName: 'X', amount: -99, merchant: 'M' },
     };
     const detail = renderFullDetail(p);
-    expect(detail.title).toBe('Big transaction');
+    expect(detail.title).toBe('Big debit');
     expect(detail.body).toContain('X');
     expect(detail.body).toContain('M');
     expect(detail.body).toMatch(/99/);

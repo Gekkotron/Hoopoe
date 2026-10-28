@@ -6,12 +6,24 @@ type Privacy = { hideAmount: boolean; hideMerchant: boolean };
 
 const amount = (n: number) => n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
 
+// Explicit +/− so a credit never reads like a spend; U+2212 for the minus.
+const signed = (n: number, dir: Direction) => `${dir === 'credit' ? '+' : '−'}${amount(Math.abs(n))}`;
+
+type Direction = 'debit' | 'credit';
+type BigTx = Extract<NotificationPayload, { kind: 'big_transaction' }>;
+// `single.amount` is signed; `summary.direction` is absent on legacy rows.
+const directionOf = (p: BigTx): Direction | undefined =>
+  'single' in p ? (p.single.amount < 0 ? 'debit' : 'credit') : p.summary.direction;
+
 const accountLabel  = (id: number, name?: string) => name ?? `account #${id}`;
 const categoryLabel = (id: number, name?: string) => name ?? `category #${id}`;
 
 export function renderTitle(p: NotificationPayload, _priv: Privacy): string {
   switch (p.kind) {
-    case 'big_transaction':      return 'Big transaction';
+    case 'big_transaction': {
+      const dir = directionOf(p);
+      return dir ? `Big ${dir}` : 'Big transaction';
+    }
     case 'account_low':          return 'Account balance low';
     case 'envelope_exceeded':    return 'Budget exceeded';
     case 'bank_sync_failed':     return 'Bank sync failed';
@@ -23,12 +35,14 @@ export function renderBody(p: NotificationPayload, priv: Privacy): string {
   switch (p.kind) {
     case 'big_transaction': {
       if ('summary' in p) {
-        const total = priv.hideAmount ? '' : ` (${amount(p.summary.total)})`;
+        const dir   = p.summary.direction;
+        const total = priv.hideAmount ? '' : ` (${dir ? signed(p.summary.total, dir) : amount(p.summary.total)})`;
         const acct  = accountLabel(p.summary.accountId, p.summary.accountName);
-        return `${p.summary.count} big transactions on ${acct}${total}`;
+        const noun  = `${dir ?? 'transaction'}${p.summary.count === 1 ? '' : 's'}`;
+        return `${p.summary.count} big ${noun} on ${acct}${total}`;
       }
       const merchant = !priv.hideMerchant && p.single.merchant ? ` at ${p.single.merchant}` : '';
-      const money    = priv.hideAmount ? '' : `${amount(p.single.amount)} `;
+      const money    = priv.hideAmount ? '' : `${signed(p.single.amount, directionOf(p)!)} `;
       const acct     = accountLabel(p.single.accountId, p.single.accountName);
       return `${money}on ${acct}${merchant}`.trim() || 'A big transaction was recorded';
     }
