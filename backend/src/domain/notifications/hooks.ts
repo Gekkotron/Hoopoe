@@ -53,6 +53,13 @@ export async function computeCurrentBalance(userId: number, accountId: number): 
   return Number(account.openingBalance) + Number(sumRow?.sum ?? 0);
 }
 
+// Debits and credits batch separately so a big_transaction summary is never
+// a meaningless sum of outgoing and incoming money — the batcher reads the
+// direction off the (signed) amounts it receives.
+function btBatchKey(accountId: number, amount: number): string {
+  return `bt:${accountId}:${amount < 0 ? 'debit' : 'credit'}`;
+}
+
 // Best-effort by design: a broken notification check must never affect the
 // transaction insert it's attached to (the row is already committed by the
 // time this runs). Any failure here is logged and swallowed, never thrown.
@@ -66,7 +73,7 @@ export async function afterTransactionInserted(userId: number, tx: {
     // big_transaction
     const threshold = prefs.triggers.bigTransaction.thresholds[String(tx.accountId)];
     if (prefs.triggers.bigTransaction.enabled && threshold != null && Math.abs(tx.amount) >= threshold) {
-      queueBatched(userId, `bt:${tx.accountId}`, { accountId: tx.accountId, amount: Math.abs(tx.amount) });
+      queueBatched(userId, btBatchKey(tx.accountId, tx.amount), { accountId: tx.accountId, amount: tx.amount });
     }
 
     // account_low
@@ -127,7 +134,7 @@ export async function afterTransactionsBatchInserted(
     if (prefs.triggers.bigTransaction.enabled && btThreshold != null) {
       for (const t of txs) {
         if (Math.abs(t.amount) >= btThreshold) {
-          queueBatched(userId, `bt:${accountId}`, { accountId, amount: Math.abs(t.amount) });
+          queueBatched(userId, btBatchKey(accountId, t.amount), { accountId, amount: t.amount });
         }
       }
     }
@@ -177,7 +184,8 @@ export async function afterBankSyncCompleted(userId: number, accountId: number, 
         { idempotency: `sync:${accountId}:${today}` });
     }
     // At end of sync, force-flush any accumulated big_transaction batches for accounts in this sync.
-    await flushBatch(userId, `bt:${accountId}`);
+    await flushBatch(userId, btBatchKey(accountId, -1));
+    await flushBatch(userId, btBatchKey(accountId, 1));
   } catch (err) {
     reportHookError('afterBankSyncCompleted', err);
   }

@@ -14,7 +14,7 @@ describe('batcher', () => {
     const [uid, kind, payload] = emit.mock.calls[0]!;
     expect(uid).toBe(1);
     expect(kind).toBe('big_transaction');
-    expect((payload as any).summary).toEqual({ accountId: 9, count: 2, total: 1200 });
+    expect((payload as any).summary).toEqual({ accountId: 9, count: 2, total: 1200, direction: 'credit' });
   });
 
   it('flushes immediately at MAX_ITEMS', async () => {
@@ -29,5 +29,12 @@ describe('batcher', () => {
     await flushBatch(3, 'bt:2');
     expect(emit).toHaveBeenCalledTimes(1);
     expect((emit.mock.calls[0]![2] as any).single).toBeUndefined(); // batcher always summarises
+  });
+
+  it('tags a batch of negative amounts as debits and sums their magnitude', async () => {
+    queueBatched(4, 'bt:5:debit', { accountId: 5, amount: -200 });
+    queueBatched(4, 'bt:5:debit', { accountId: 5, amount: -300 });
+    await flushBatch(4, 'bt:5:debit');
+    expect((emit.mock.calls[0]![2] as any).summary).toEqual({ accountId: 5, count: 2, total: 500, direction: 'debit' });
   });
 });

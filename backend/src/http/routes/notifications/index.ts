@@ -48,7 +48,7 @@ async function sampleTestPayload(
   const cat  = firstCategory ?? { id: 0, name: 'your category' };
   switch (kind) {
     case 'big_transaction':
-      return { kind, single: { txId: 0, accountId: acct.id, accountName: acct.name, amount: 249.99, merchant: 'Amazon' } };
+      return { kind, single: { txId: 0, accountId: acct.id, accountName: acct.name, amount: -249.99, merchant: 'Amazon' } };
     case 'account_low':
       return { kind, accountId: acct.id, accountName: acct.name, balance: 42.5, floor: 100 };
     case 'envelope_exceeded': {

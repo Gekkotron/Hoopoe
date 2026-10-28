@@ -56,4 +56,28 @@ describe('render', () => {
     const p = { kind: 'account_low' as const, accountId: 3, balance: 10, floor: 100 };
     expect(renderBody(p, privacyOff)).toContain('account #3 dipped');
   });
+
+  it('big_transaction carries the debit/credit direction', () => {
+    const credit = { kind: 'big_transaction' as const, single: { txId: 1, accountId: 1, accountName: 'Compte', amount: 200, merchant: null } };
+    const debit  = { kind: 'big_transaction' as const, single: { txId: 2, accountId: 1, accountName: 'Compte', amount: -200, merchant: null } };
+    expect(renderTitle(credit, privacyOff)).toBe('Big credit');
+    expect(renderTitle(debit, privacyOff)).toBe('Big debit');
+    expect(renderBody(credit, privacyOff)).toMatch(/^\+200/);
+    expect(renderBody(debit, privacyOff)).toMatch(/^−200/);
+
+    const sumCredit = { kind: 'big_transaction' as const, summary: { accountId: 1, accountName: 'Compte', count: 1, total: 200, direction: 'credit' as const } };
+    const sumDebit  = { kind: 'big_transaction' as const, summary: { accountId: 1, accountName: 'Compte', count: 2, total: 500, direction: 'debit' as const } };
+    expect(renderTitle(sumCredit, privacyOff)).toBe('Big credit');
+    expect(renderBody(sumCredit, privacyOff)).toMatch(/^1 big credit on Compte \(\+200/);
+    expect(renderTitle(sumDebit, privacyOff)).toBe('Big debit');
+    expect(renderBody(sumDebit, privacyOff)).toMatch(/^2 big debits on Compte \(−500/);
+    // Privacy hides the amount, not the direction.
+    expect(renderBody(sumCredit, privacyOn)).toBe('1 big credit on Compte');
+  });
+
+  it('big_transaction summary without a direction (legacy row) keeps the neutral wording', () => {
+    const p = { kind: 'big_transaction' as const, summary: { accountId: 1, accountName: 'Compte', count: 3, total: 900 } };
+    expect(renderTitle(p, privacyOff)).toBe('Big transaction');
+    expect(renderBody(p, privacyOff)).toMatch(/^3 big transactions on Compte/);
+  });
 });

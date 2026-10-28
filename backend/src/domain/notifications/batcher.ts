@@ -31,7 +31,10 @@ export async function flushBatch(userId: number, batchKey: string): Promise<void
   if (buf.timer) clearTimeout(buf.timer);
   if (buf.items.length === 0) return;
   const accountId = buf.items[0]!.accountId;
-  const total = buf.items.reduce((s, i) => s + i.amount, 0);
+  // Callers key debits and credits into separate batches, so the first
+  // item's sign speaks for the whole buffer.
+  const direction = buf.items[0]!.amount < 0 ? 'debit' : 'credit';
+  const total = buf.items.reduce((s, i) => s + Math.abs(i.amount), 0);
   const idempotency = `bt:${accountId}:${todayLocalIso()}:${Date.now()}`;
-  await emitter(userId, 'big_transaction', { kind: 'big_transaction', summary: { accountId, count: buf.items.length, total } }, { idempotency });
+  await emitter(userId, 'big_transaction', { kind: 'big_transaction', summary: { accountId, count: buf.items.length, total, direction } }, { idempotency });
 }

@@ -205,7 +205,7 @@ export type NotificationKind =
 // existed still renders (the renderer falls back to the id).
 export type NotificationPayload =
   | { kind: 'big_transaction'; single: { txId: number; accountId: number; accountName?: string; amount: number; merchant: string | null } }
-  | { kind: 'big_transaction'; summary: { accountId: number; accountName?: string; count: number; total: number } }
+  | { kind: 'big_transaction'; summary: { accountId: number; accountName?: string; count: number; total: number; direction?: 'debit' | 'credit' } }
   | { kind: 'account_low'; accountId: number; accountName?: string; balance: number; floor: number }
   | { kind: 'envelope_exceeded'; categoryId: number; categoryName?: string; envelope: number; spent: number; month: string }
   | { kind: 'bank_sync_failed'; accountId: number; accountName?: string; reason: string }
