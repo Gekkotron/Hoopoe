@@ -5,7 +5,7 @@ import { loans } from '../../../db/schema.js';
 import { userId } from '../../plugins/auth.js';
 import { parseId, isPgError } from '../../../lib/http.js';
 import { buildSchedule, type LoanSummary } from '../../../domain/loans/engine/index.js';
-import { todayIso, toRecord, toTerms } from '../../../domain/loans/record.js';
+import { todayIso, toColumns, toRecord, toTerms } from '../../../domain/loans/record.js';
 import { AsOfQuery, LoanBody, type LoanBodyT } from './schemas.js';
 
 const NAME_TAKEN = { error: 'a loan with this name already exists' };
@@ -54,7 +54,7 @@ export function registerCrud(app: FastifyInstance): void {
     const input = await readBody(uid, req.body, reply, null);
     if (!input) return reply;
     try {
-      const [row] = await db.insert(loans).values({ userId: uid, ...input.values }).returning();
+      const [row] = await db.insert(loans).values({ userId: uid, ...toColumns(input.values) }).returning();
       if (!row) throw new Error('insert returned no row');
       return reply.code(201).send({ loan: toRecord(row), summary: input.summary });
     } catch (err) {
@@ -88,7 +88,7 @@ export function registerCrud(app: FastifyInstance): void {
     try {
       const [row] = await db
         .update(loans)
-        .set({ ...input.values, updatedAt: new Date() })
+        .set({ ...toColumns(input.values), updatedAt: new Date() })
         .where(and(eq(loans.id, id), eq(loans.userId, uid)))
         .returning();
       if (!row) return reply.code(404).send({ error: 'not found' });

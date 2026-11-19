@@ -41,6 +41,12 @@ describe('loan zod schemas', () => {
     expect(r.success).toBe(false);
   });
 
+  it('rejects amounts that overflow numeric(14,2)', () => {
+    expect(LoanTermsBody.safeParse({ ...terms, principal: '999999999999.99' }).success).toBe(true);
+    expect(LoanTermsBody.safeParse({ ...terms, principal: '1000000000000' }).success).toBe(false);
+    expect(LoanTermsBody.safeParse({ ...terms, fees: '1000000000000' }).success).toBe(false);
+  });
+
   it('validates early repayments', () => {
     const er = { date: '2030-01', amount: '20000', effect: 'shorten', penalty: '600' };
     expect(LoanTermsBody.safeParse({ ...terms, earlyRepayments: [er] }).success).toBe(true);

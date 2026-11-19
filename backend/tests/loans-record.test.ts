@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { todayIso, toRecord, toTerms, trimDecimal, type LoanRow } from '../src/domain/loans/record.js';
+import { todayIso, toColumns, toRecord, toTerms, trimDecimal, type LoanRow } from '../src/domain/loans/record.js';
 
 const row: LoanRow = {
   id: 7,
@@ -56,5 +56,16 @@ describe('loan record mapping', () => {
 
   it('formats today as a local ISO date', () => {
     expect(todayIso(new Date(2026, 0, 5, 23, 30))).toBe('2026-01-05');
+  });
+
+  it('maps insuranceAmount onto the insurance_monthly_amount column key', () => {
+    const cols = toColumns({ name: 'Maison', insuranceAmount: '42.71' });
+    expect(cols).toEqual({ name: 'Maison', insuranceMonthlyAmount: '42.71' });
+    expect('insuranceAmount' in cols).toBe(false);
+  });
+
+  it('writes NULL when insuranceAmount is absent', () => {
+    expect(toColumns({ name: 'Maison' }).insuranceMonthlyAmount).toBeNull();
+    expect(toColumns({ insuranceAmount: null }).insuranceMonthlyAmount).toBeNull();
   });
 });

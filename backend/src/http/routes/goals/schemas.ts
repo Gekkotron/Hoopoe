@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const decimal = z
   .string()
-  .regex(/^-?\d+(\.\d{1,2})?$/, 'must be a decimal with up to 2 fraction digits');
+  .regex(/^-?\d{1,12}(\.\d{1,2})?$/, 'must be a decimal with up to 12 integer and 2 fraction digits');
 
 const positiveDecimal = decimal.refine(
   (v) => Number(v) > 0,
