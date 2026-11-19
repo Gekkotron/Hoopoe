@@ -1,4 +1,4 @@
-import { readdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { readdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { db } from '../../db/client.js';
@@ -9,7 +9,9 @@ import { importPdf } from './pdf/index.js';
 import {
   candidateFormat,
   isCandidateFile,
+  isSettled,
   matchAccountFolder,
+  maxBytesFor,
   outcomePath,
 } from './watch-folder-core.js';
 
@@ -69,7 +71,11 @@ export async function scanWatchFolderOnce(dir: string, log: WatchLog): Promise<W
     const subPath = join(dir, sub.name);
     let names: string[];
     try {
-      names = await readdir(subPath);
+      // Dirent.isFile() is false for symlinks, so a link planted in the
+      // folder can't make the importer read a file outside the watch dir.
+      names = (await readdir(subPath, { withFileTypes: true }))
+        .filter((e) => e.isFile())
+        .map((e) => e.name);
     } catch {
       continue;
     }
@@ -94,6 +100,12 @@ export async function scanWatchFolderOnce(dir: string, log: WatchLog): Promise<W
       const filePath = join(subPath, name);
       const format = candidateFormat(name)!;
       try {
+        const st = await stat(filePath);
+        // Still being written (or just landed): leave it for the next poll.
+        if (!isSettled(st.mtimeMs, Date.now())) continue;
+        if (st.size > maxBytesFor(format)) {
+          throw new Error(`file too large (${st.size} bytes, max ${maxBytesFor(format)})`);
+        }
         const buffer = await readFile(filePath);
         if (format === 'pdf') {
           const r = await importPdf({

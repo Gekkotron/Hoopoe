@@ -55,9 +55,17 @@ export async function importPhoto(opts: {
   if (!mime) throw new PhotoUnsupportedMimeError();
 
   const jpegBuf = await transcodeHeicToJpeg(opts.buffer, mime);
-  // Normalize to PNG so downstream page-rendering assumptions hold.
-  const pngBuf = await sharp(jpegBuf).png().toBuffer();
-  const meta = await sharp(pngBuf).metadata();
+  // Normalize to PNG so downstream page-rendering assumptions hold. The magic
+  // bytes only prove the header; a truncated/corrupt body makes sharp throw,
+  // which is a client error (400), not a server fault.
+  let pngBuf: Buffer;
+  let meta: sharp.Metadata;
+  try {
+    pngBuf = await sharp(jpegBuf).png().toBuffer();
+    meta = await sharp(pngBuf).metadata();
+  } catch {
+    throw new PhotoUnsupportedMimeError('image illisible ou corrompue');
+  }
   const pngBase64 = pngBuf.toString('base64');
 
   const [draft] = await db.insert(pdfImportDrafts).values({

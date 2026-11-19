@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs';
+import { inflateRawSync } from 'node:zlib';
 import type { ParsedTransaction } from './ofx-parser.js';
 import { parseFrenchDate, parseAmountAuto } from './french-numerics.js';
 import {
@@ -28,6 +29,13 @@ import {
 // which absorbs the Lotus 1900 leap-year bug for any date after 1900-03-01.
 
 const HEADER_SCAN_ROWS = 20;
+// Statement exports never need more than a few dozen columns; a stray cell
+// at XFD would otherwise make every row scan 16384 cells.
+const MAX_COLUMNS = 256;
+// Upper bound on what the .xlsx archive may inflate to. exceljs unzips every
+// part into memory, so a small upload of highly compressible data (zip bomb)
+// would otherwise exhaust the heap.
+const MAX_INFLATED_BYTES = 256 * 1024 * 1024;
 const MS_PER_DAY = 86400000;
 
 function cellToPrimitive(v: ExcelJS.CellValue): string | number | Date | null {
@@ -77,7 +85,50 @@ function toText(v: string | number | Date | null): string {
   return String(v).trim();
 }
 
+// Walks the zip central directory and inflates every entry with a running
+// output cap, so neither declared sizes nor an understated central directory
+// can smuggle a bomb past exceljs/JSZip. Anything that is not a readable zip
+// is left for exceljs to reject with its own message.
+function assertInflatedSizeBounded(buf: Buffer): void {
+  const tooLarge = () => new Error(`invalid Excel file: archive expands beyond ${MAX_INFLATED_BYTES / (1024 * 1024)} MB (too large)`);
+  const minEocd = Math.max(0, buf.length - 22 - 0xffff);
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= minEocd; i--) {
+    if (buf.readUInt32LE(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) return;
+  const count = buf.readUInt16LE(eocd + 10);
+  let pos = buf.readUInt32LE(eocd + 16);
+  let budget = MAX_INFLATED_BYTES;
+  for (let n = 0; n < count; n++) {
+    if (pos + 46 > buf.length || buf.readUInt32LE(pos) !== 0x02014b50) return;
+    const method = buf.readUInt16LE(pos + 10);
+    const csize = buf.readUInt32LE(pos + 20);
+    const usize = buf.readUInt32LE(pos + 24);
+    const nameLen = buf.readUInt16LE(pos + 28);
+    const extraLen = buf.readUInt16LE(pos + 30);
+    const commentLen = buf.readUInt16LE(pos + 32);
+    const localOff = buf.readUInt32LE(pos + 42);
+    pos += 46 + nameLen + extraLen + commentLen;
+    if (usize > budget) throw tooLarge();
+    if (method === 8 && localOff + 30 <= buf.length && buf.readUInt32LE(localOff) === 0x04034b50) {
+      const start = localOff + 30 + buf.readUInt16LE(localOff + 26) + buf.readUInt16LE(localOff + 28);
+      try {
+        const out = inflateRawSync(buf.subarray(start, start + csize), { maxOutputLength: budget });
+        budget -= out.length;
+      } catch (err) {
+        if ((err as { code?: string }).code === 'ERR_BUFFER_TOO_LARGE') throw tooLarge();
+        // Corrupt entry: let exceljs report it.
+        return;
+      }
+    } else {
+      budget -= usize;
+    }
+  }
+}
+
 async function loadWorkbook(buf: Buffer): Promise<ExcelJS.Workbook> {
+  assertInflatedSizeBounded(buf);
   const wb = new ExcelJS.Workbook();
   try {
     await wb.xlsx.load(buf as unknown as ExcelJS.Buffer);
@@ -104,7 +155,7 @@ export async function parseXlsx(buf: Buffer): Promise<ParsedTransaction[]> {
   const ws = wb.worksheets.find((s) => s.actualRowCount > 0);
   if (!ws) return [];
 
-  const width = ws.columnCount;
+  const width = Math.min(ws.columnCount, MAX_COLUMNS);
   let headerRowNum = -1;
   let headers: string[] = [];
   const firstRows: string[][] = [];
@@ -153,11 +204,14 @@ export async function parseXlsx(buf: Buffer): Promise<ParsedTransaction[]> {
   const memoIdx = idx(memoCol);
 
   const out: ParsedTransaction[] = [];
-  for (let r = headerRowNum + 1; r <= ws.rowCount; r++) {
-    const vals = rowValues(ws.getRow(r), width);
+  // eachRow visits only rows that exist, so a sparse sheet whose used range
+  // reaches row 1,048,576 costs one iteration per populated row.
+  ws.eachRow({ includeEmpty: false }, (row, r) => {
+    if (r <= headerRowNum) return;
+    const vals = rowValues(row, width);
     const date = toDate(vals[dateIdx] ?? null);
     const label = toText(vals[labelIdx] ?? null);
-    if (!date || !label) continue;
+    if (!date || !label) return;
 
     let amount: string | null;
     if (amountIdx >= 0) {
@@ -165,10 +219,11 @@ export async function parseXlsx(buf: Buffer): Promise<ParsedTransaction[]> {
     } else {
       const d = debitIdx >= 0 ? toAmount(vals[debitIdx] ?? null) : null;
       const c = creditIdx >= 0 ? toAmount(vals[creditIdx] ?? null) : null;
-      if (d !== null) amount = d.startsWith('-') ? d : `-${d}`;
-      else amount = c;
+      // A numeric 0 / "0,00" in the unused side must not shadow the other.
+      if (d !== null && Number(d) !== 0) amount = d.startsWith('-') ? d : `-${d}`;
+      else amount = c ?? d;
     }
-    if (amount === null) continue;
+    if (amount === null) return;
 
     out.push({
       date,
@@ -177,6 +232,6 @@ export async function parseXlsx(buf: Buffer): Promise<ParsedTransaction[]> {
       memo: memoIdx >= 0 ? toText(vals[memoIdx] ?? null) || null : null,
       fitid: null,
     });
-  }
+  });
   return out;
 }

@@ -112,6 +112,13 @@ describe('importPhoto', () => {
     expect(h.inserted).toBeUndefined();
   });
 
+  it('rejects a corrupt image body (valid JPEG magic bytes) with PhotoUnsupportedMimeError, not a raw sharp error', async () => {
+    const corrupt = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('not really a jpeg body at all')]);
+    await expect(importPhoto({ filename: 'a.jpg', accountId: 1, userId: 1, buffer: corrupt }))
+      .rejects.toBeInstanceOf(PhotoUnsupportedMimeError);
+    expect(h.inserted).toBeUndefined();
+  });
+
   it('inserts a pending photo draft and returns a needs_template result with pixel dims', async () => {
     const result = await importPhoto({ filename: 'a.jpg', accountId: 7, userId: 3, buffer: await jpeg(8, 6) });
     const row = h.inserted as Record<string, unknown>;

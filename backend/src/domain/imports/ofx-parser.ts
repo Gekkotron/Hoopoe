@@ -17,7 +17,12 @@ const HEADER_END_RE = /<OFX>/i;
 function detectCharset(rawHead: string): string {
   // The header section is ASCII-safe; reading it as latin1 is fine.
   const m = rawHead.match(/CHARSET\s*:\s*([^\r\n]+)/i);
-  const cs = m?.[1]?.trim().toUpperCase();
+  let cs = m?.[1]?.trim().toUpperCase();
+  if (!cs) {
+    // OFX 2.x is XML: the encoding lives in the prolog, not an SGML header.
+    const x = rawHead.match(/^\s*<\?xml[^>]*\sencoding\s*=\s*["']([^"']+)["']/i);
+    cs = x?.[1]?.trim().toUpperCase();
+  }
   if (!cs) return 'utf-8';
   if (cs === '1252' || cs === 'WINDOWS-1252') return 'windows-1252';
   if (cs === 'ISO-8859-1' || cs === 'LATIN1') return 'iso-8859-1';
@@ -35,7 +40,12 @@ export function decodeOfxBuffer(buf: Buffer): string {
   })();
   const head = buf.toString('latin1', 0, Math.max(headEnd, 256));
   const charset = detectCharset(head);
-  return iconv.decode(buf, charset);
+  const text = iconv.decode(buf, charset);
+  // CHARSET:NONE, a missing header or an unknown name all land on utf-8; real
+  // French exports in those cases are single-byte, and invalid utf-8 shows up
+  // as replacement characters.
+  if (charset === 'utf-8' && text.includes('\ufffd')) return iconv.decode(buf, 'windows-1252');
+  return text;
 }
 
 function extractTagValue(block: string, tag: string): string | null {
@@ -44,8 +54,19 @@ function extractTagValue(block: string, tag: string): string | null {
   const re = new RegExp(`<${tag}>\\s*([^<\\r\\n]*)`, 'i');
   const m = block.match(re);
   if (!m) return null;
-  const v = (m[1] ?? '').trim();
+  const v = decodeEntities((m[1] ?? '').trim());
   return v || null;
+}
+
+// OFX (SGML and XML flavours alike) escapes &, <, > in text values.
+function decodeEntities(s: string): string {
+  if (!s.includes('&')) return s;
+  return s
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&apos;/gi, "'")
+    .replace(/&amp;/gi, '&');
 }
 
 function parseOfxDate(s: string): string {
@@ -60,7 +81,7 @@ function parseOfxDate(s: string): string {
 function parseOfxAmount(s: string): string {
   // OFX uses a period as the decimal separator, but some French exporters
   // mistakenly emit a comma — accept both.
-  const n = s.replace(',', '.').trim();
+  const n = s.replace(',', '.').trim().replace(/^\+/, '');
   if (!/^-?\d+(\.\d+)?$/.test(n)) {
     throw new Error(`invalid OFX amount: ${JSON.stringify(s)}`);
   }

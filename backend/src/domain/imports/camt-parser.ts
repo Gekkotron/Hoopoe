@@ -33,7 +33,10 @@ function parseEntry(block: string): ParsedTransaction | null {
   // Only booked entries land in the ledger; PDNG rows change amount, date,
   // or vanish entirely before booking. Missing <Sts> is treated as BOOK
   // because some banks omit the tag on statements that are booked by nature.
-  const sts = extractTag(block, 'Sts');
+  // camt.05x.001.08+ wraps the status as <Sts><Cd>BOOK</Cd></Sts>; older
+  // versions carry it as plain text.
+  const stsBlock = block.match(/<Sts(?:\s[^>]*)?>([\s\S]*?)<\/Sts>/);
+  const sts = stsBlock ? (extractTag(stsBlock[1] ?? '', 'Cd') ?? extractText(stsBlock[1] ?? '')) : null;
   if (sts && sts !== 'BOOK') return null;
 
   const amtRaw = extractTag(block, 'Amt');
@@ -55,8 +58,8 @@ function parseEntry(block: string): ParsedTransaction | null {
   const date = rawDate.slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
 
-  const ustrdFragments = [...block.matchAll(/<Ustrd>([^<]*)<\/Ustrd>/g)]
-    .map((m) => (m[1] ?? '').trim())
+  const ustrdFragments = [...block.matchAll(new RegExp(`<Ustrd>(${TEXT})</Ustrd>`, 'g'))]
+    .map((m) => decodeXmlText(m[1] ?? '').trim())
     .filter((s) => s.length > 0);
   const remittance = ustrdFragments.join(' ');
   // The counterparty is whoever is on the other side of the movement: on a
@@ -83,12 +86,40 @@ function parseEntry(block: string): ParsedTransaction | null {
   };
 }
 
+// Element text: anything up to the next tag, with CDATA sections allowed.
+const TEXT = '(?:[^<]|<!\\[CDATA\\[[\\s\\S]*?\\]\\]>)*';
+
+const NAMED_ENTITIES: Record<string, string> = { lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' };
+
+// Single pass so CDATA content is taken literally and an escaped "&amp;lt;"
+// decodes to "&lt;", not "<".
+function decodeXmlText(s: string): string {
+  return s.replace(
+    /<!\[CDATA\[([\s\S]*?)\]\]>|&(#x[0-9a-f]+|#\d+|lt|gt|quot|apos|amp);/gi,
+    (m, cdata: string | undefined, ent: string | undefined) => {
+      if (cdata !== undefined) return cdata;
+      const e = ent!.toLowerCase();
+      if (e.startsWith('#x')) return safeCodePoint(parseInt(e.slice(2), 16));
+      if (e.startsWith('#')) return safeCodePoint(Number(e.slice(1)));
+      return NAMED_ENTITIES[e] ?? m;
+    },
+  );
+}
+
+function safeCodePoint(n: number): string {
+  return Number.isInteger(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : '';
+}
+
+function extractText(raw: string): string | null {
+  const v = decodeXmlText(raw).trim();
+  return v || null;
+}
+
 function extractTag(xml: string, tag: string): string | null {
-  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([^<]*)</${tag}>`);
+  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>(${TEXT})</${tag}>`);
   const m = xml.match(re);
   if (!m) return null;
-  const v = (m[1] ?? '').trim();
-  return v || null;
+  return extractText(m[1] ?? '');
 }
 
 function extractTagInParent(xml: string, parent: string, child: string): string | null {
