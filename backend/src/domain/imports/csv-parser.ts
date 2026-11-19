@@ -117,15 +117,20 @@ export function parseFrenchCsv(buf: Buffer): ParsedTransaction[] {
     } else {
       const d = debitCol ? row[debitCol] : '';
       const c = creditCol ? row[creditCol] : '';
-      if (d && d.trim()) {
-        const n = parseAmount(d);
-        amount = n.startsWith('-') ? n : `-${n}`;
-      } else if (c && c.trim()) {
-        amount = parseAmount(c);
+      // Some banks fill the unused side with "0,00" instead of leaving it
+      // blank; a zero debit must not shadow the credit on the same row.
+      const debit = d && d.trim() ? parseAmount(d) : '';
+      if (debit !== '' && Number(debit) !== 0) {
+        amount = debit.startsWith('-') ? debit : `-${debit}`;
       } else {
-        continue;
+        const credit = c && c.trim() ? parseAmount(c) : '';
+        amount = credit !== '' ? credit : debit;
       }
     }
+    // A blank amount cell (carried-forward balance rows, footers) is not a
+    // transaction; an empty string would fail the NUMERIC insert and abort
+    // the whole file.
+    if (amount === '') continue;
 
     out.push({
       date: parseFrenchDate(dateRaw),
