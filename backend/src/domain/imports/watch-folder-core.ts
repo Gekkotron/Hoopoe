@@ -5,6 +5,25 @@
 
 export type WatchFormat = 'ofx' | 'csv' | 'pdf';
 export type WatchOutcome = 'imported' | 'failed' | 'needs-template';
+// A file touched more recently than this may still be mid-copy (SMB/NFS
+// copies grow the file in place). Importing a truncated CSV would insert a
+// cut-off last row and then rename the file .imported, so the rest of the
+// statement would never be picked up.
+export const WATCH_MIN_AGE_MS = 10_000;
+
+// Same ceilings as the upload routes (imports.ts: 20 MB, PDF_MAX_BYTES 10 MB);
+// the watcher reads the whole file into memory.
+export const WATCH_MAX_BYTES = 20 * 1024 * 1024;
+export const WATCH_PDF_MAX_BYTES = 10 * 1024 * 1024;
+
+export function maxBytesFor(format: WatchFormat): number {
+  return format === 'pdf' ? WATCH_PDF_MAX_BYTES : WATCH_MAX_BYTES;
+}
+
+export function isSettled(mtimeMs: number, nowMs: number): boolean {
+  return nowMs - mtimeMs >= WATCH_MIN_AGE_MS;
+}
+
 const OUTCOME_SUFFIXES = ['.imported', '.failed', '.needs-template', '.error.txt'];
 
 // Extension map kept in lock-step with inferFormat in import-service.ts.

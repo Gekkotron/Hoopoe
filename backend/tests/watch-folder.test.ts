@@ -1,6 +1,6 @@
 // requires Postgres or PGlite + onboarding setup — run with RUN_DB_TESTS=1
 import { describe, it, expect, beforeAll, vi } from 'vitest';
-import { mkdtemp, mkdir, writeFile, readdir } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile as writeFileRaw, utimes, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -11,6 +11,14 @@ let app: FastifyInstance;
 let cookie: string;
 let accountId: number;
 let watchDir: string;
+
+// The watcher skips files modified in the last few seconds (possible
+// in-progress copy), so back-date every fixture.
+async function writeFile(path: string, data: string): Promise<void> {
+  await writeFileRaw(path, data);
+  const past = new Date(Date.now() - 60_000);
+  await utimes(path, past, past);
+}
 
 const log = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
