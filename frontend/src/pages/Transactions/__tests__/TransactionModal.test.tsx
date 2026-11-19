@@ -18,7 +18,7 @@ vi.mock('../../../api/client', async () => {
   const actual = await vi.importActual<typeof import('../../../api/client')>('../../../api/client');
   return { ...actual, api: vi.fn() };
 });
-import { api } from '../../../api/client';
+import { api, ApiError } from '../../../api/client';
 const apiMock = vi.mocked(api);
 
 // Labels are not wired with for/id, so locate the sibling control by DOM
@@ -274,5 +274,67 @@ describe('TransactionModal', () => {
     await user.type(firstMag, '999.00');
     const submit = screen.getByRole('button', { name: 'Créer la transaction' });
     expect(submit).toBeDisabled();
+  });
+
+  describe('duplicate transaction (409)', () => {
+    const DUP_MSG = 'une transaction identique existe déjà pour ce compte (même date, montant et libellé)';
+    const BODY = {
+      accountId: 1, date: '2026-06-15', amount: '-4.50', rawLabel: 'Café',
+      categoryId: null, notes: null, lockYears: null,
+    };
+
+    async function fillAndSubmit(user: ReturnType<typeof userEvent.setup>) {
+      await user.selectOptions(fieldFor('Compte'), '1');
+      await user.clear(screen.getByPlaceholderText('JJ/MM/AAAA'));
+      await user.type(screen.getByPlaceholderText('JJ/MM/AAAA'), '15/06/2026');
+      await user.type(screen.getByPlaceholderText('-25,30'), '-4.50');
+      await user.type(screen.getByPlaceholderText('Carrefour Évry'), 'Café');
+      await user.click(screen.getByRole('button', { name: 'Créer la transaction' }));
+    }
+
+    it('shows "Ajouter quand même" and re-sends the same payload with force: true', async () => {
+      const onClose = vi.fn();
+      apiMock
+        .mockRejectedValueOnce(new ApiError(DUP_MSG, 409, { code: 'duplicate_transaction', error: DUP_MSG }))
+        .mockResolvedValueOnce({ transaction: { id: 5 } });
+      const user = userEvent.setup();
+      renderModal({ onClose });
+      await fillAndSubmit(user);
+
+      expect(await screen.findByText(DUP_MSG)).toBeInTheDocument();
+      // First attempt never carries force.
+      expect(apiMock).toHaveBeenNthCalledWith(1, '/api/transactions', { method: 'POST', json: BODY });
+
+      await user.click(screen.getByRole('button', { name: 'Ajouter quand même' }));
+      await waitFor(() =>
+        expect(apiMock).toHaveBeenNthCalledWith(2, '/api/transactions', {
+          method: 'POST', json: { ...BODY, force: true },
+        }),
+      );
+      await waitFor(() => expect(onClose).toHaveBeenCalled());
+    });
+
+    it('hides the button once the form is edited', async () => {
+      apiMock.mockRejectedValueOnce(new ApiError(DUP_MSG, 409, { code: 'duplicate_transaction', error: DUP_MSG }));
+      const user = userEvent.setup();
+      renderModal();
+      await fillAndSubmit(user);
+      await screen.findByRole('button', { name: 'Ajouter quand même' });
+
+      await user.type(screen.getByPlaceholderText('Carrefour Évry'), 'x');
+      await waitFor(() =>
+        expect(screen.queryByRole('button', { name: 'Ajouter quand même' })).not.toBeInTheDocument(),
+      );
+    });
+
+    it('does not show the button for other errors', async () => {
+      apiMock.mockRejectedValueOnce(new ApiError('boom', 409, { error: 'boom' }));
+      const user = userEvent.setup();
+      renderModal();
+      await fillAndSubmit(user);
+
+      expect(await screen.findByText('boom')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Ajouter quand même' })).not.toBeInTheDocument();
+    });
   });
 });

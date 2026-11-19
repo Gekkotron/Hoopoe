@@ -76,7 +76,7 @@ describe.skipIf(!RUN)('/api/transactions', () => {
       expect(tx.rawLabel).toBe('CB CARREFOUR');
       expect(tx.normalizedLabel).toBe('carrefour');
       expect(tx.amount).toBe('-42.30');
-      expect(tx.dedupKey).toMatch(/^hash:/);
+      expect(tx.dedupKey).toMatch(/^hash2:[0-9a-f]{64}$/);
     });
 
     it('applies the rule engine when categoryId is omitted', async () => {

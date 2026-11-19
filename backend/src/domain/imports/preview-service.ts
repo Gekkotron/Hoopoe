@@ -9,7 +9,7 @@ import { parseBai2 } from './bai2-parser.js';
 import { parseMt940 } from './mt940-parser.js';
 import { parseXlsx } from './xlsx-parser.js';
 import { normalizeLabel } from './normalize.js';
-import { computeDedupKey } from './dedup.js';
+import { computeDedupKeys } from './dedup.js';
 import { findFuzzyMatches, type FuzzyCandidate } from '../dedup/fuzzy-match.js';
 
 export type PreviewFormat = 'ofx' | 'csv' | 'camt' | 'qif' | 'mt940' | 'xlsx' | 'bai2';
@@ -77,30 +77,34 @@ export async function previewImport(opts: {
     };
   }
 
-  const withKeys = parsed.map((p) => ({
+  // Numbered over the whole file, exactly like runImport, so the n-th
+  // identical row previews against the same key it will be stored under.
+  const keys = computeDedupKeys(parsed.map((p) => ({
+    accountId: opts.accountId,
+    date: p.date,
+    amount: p.amount,
+    normalizedLabel: normalizeLabel(p.rawLabel),
+    fitid: p.fitid,
+  })));
+  const withKeys = parsed.map((p, i) => ({
     row: {
       date: p.date,
       amount: p.amount,
       rawLabel: p.rawLabel,
       memo: p.memo,
     } satisfies PreviewRow,
-    dedupKey: computeDedupKey({
-      accountId: opts.accountId,
-      date: p.date,
-      amount: p.amount,
-      normalizedLabel: normalizeLabel(p.rawLabel),
-      fitid: p.fitid,
-    }),
+    dedupKey: keys[i]!,
   }));
 
   const existing = await db
-    .select({ dedupKey: transactions.dedupKey })
+    .select({ id: transactions.id, dedupKey: transactions.dedupKey })
     .from(transactions)
     .where(and(
       eq(transactions.accountId, opts.accountId),
       inArray(transactions.dedupKey, withKeys.map((w) => w.dedupKey)),
     ));
   const seen = new Set(existing.map((r) => r.dedupKey));
+  const exactMatchedIds = new Set(existing.map((r) => r.id));
 
   // Partition parsed rows against the hard dedup key first.
   const duplicateRows: PreviewRow[] = [];
@@ -125,6 +129,7 @@ export async function previewImport(opts: {
     accountId: opts.accountId,
     userId: opts.userId,
     incoming: newFuzzyInput,
+    excludeTxIds: exactMatchedIds,
   });
 
   const newRows: PreviewRow[] = [];

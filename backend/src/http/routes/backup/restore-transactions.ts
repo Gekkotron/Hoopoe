@@ -8,6 +8,7 @@ import {
   transactionSplits,
 } from '../../../db/schema.js';
 import { fileImportKey, type BackupDump } from './schema.js';
+import { upgradeLegacyDedupKey } from '../../../domain/imports/dedup.js';
 import { resolveCategoryRef, resolveNameToId } from './helpers.js';
 import type { CategoryMaps } from './restore-steps.js';
 
@@ -99,7 +100,8 @@ export async function restoreTransactions(
         memo: t.memo ?? null,
         notes: t.notes ?? null,
         fitid: t.fitid ?? null,
-        dedupKey: t.dedupKey,
+        // Backups taken before migration 0050 carry `hash:` keys.
+        dedupKey: upgradeLegacyDedupKey(t.dedupKey),
         categoryId: catId,
         categorySource: t.categorySource,
         transferGroupId: t.transferGroupId ?? null,

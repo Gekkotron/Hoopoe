@@ -43,7 +43,9 @@ function handleTxDelete(req: DemoRequest) {
 }
 
 function handleTxCreate(req: DemoRequest) {
-  const body = (req.body ?? {}) as Partial<Transaction>;
+  // `force` (confirm-duplicate flag) is accepted and ignored: demo mode
+  // never rejects duplicates.
+  const body = (req.body ?? {}) as Partial<Transaction> & { force?: boolean };
   const now = new Date().toISOString();
   const tx: Transaction = {
     id: nextId(getState().transactions as Transaction[]),

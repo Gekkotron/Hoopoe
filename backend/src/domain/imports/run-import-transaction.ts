@@ -2,7 +2,7 @@ import { eq, inArray, sql } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import { fileImports, transactions } from '../../db/schema.js';
 import { normalizeLabel } from './normalize.js';
-import { computeDedupKey } from './dedup.js';
+import { computeDedupKeys } from './dedup.js';
 import { emitAutoSplits, loadRuleEngine } from '../rules/recategorize.js';
 import { firstMatch } from '../rules/matcher.js';
 import type { ParsedTransaction } from './ofx-parser.js';
@@ -67,14 +67,19 @@ export async function runImportTransaction(
         fitid: string | null; dedupKey: string; sourceFileId: number;
       }> = [];
       const parsedIndexForRowValue: number[] = [];
+      // Number identical rows over the whole file, before user skips, so
+      // the keys match what the preview showed and what a re-import of the
+      // same file computes.
+      const normalizedLabels = parsed.map((p) => normalizeLabel(p.rawLabel));
+      const dedupKeys = computeDedupKeys(parsed.map((p, i) => ({
+        accountId: opts.accountId, date: p.date, amount: p.amount,
+        normalizedLabel: normalizedLabels[i]!, fitid: p.fitid,
+      })));
       for (let i = 0; i < parsed.length; i++) {
         if (skipSet.has(i)) continue;
         const p = parsed[i]!;
-        const normalizedLabel = normalizeLabel(p.rawLabel);
-        const dedupKey = computeDedupKey({
-          accountId: opts.accountId, date: p.date, amount: p.amount,
-          normalizedLabel, fitid: p.fitid,
-        });
+        const normalizedLabel = normalizedLabels[i]!;
+        const dedupKey = dedupKeys[i]!;
         rowValues.push({
           userId: opts.userId, accountId: opts.accountId, date: p.date, amount: p.amount,
           rawLabel: p.rawLabel, normalizedLabel, memo: p.memo, fitid: p.fitid,

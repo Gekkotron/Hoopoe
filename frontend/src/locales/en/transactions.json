@@ -161,6 +161,7 @@
     },
     "actions": {
       "create": "Create the transaction",
+      "addAnyway": "Add anyway",
       "creating": "Creating…",
       "saving": "Saving…"
     }
