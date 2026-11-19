@@ -61,7 +61,7 @@ export function registerCategoriesReportRoute(app: FastifyInstance): void {
         ${toDate ? sql`AND e.date <= ${toDate}` : sql``}
         ${accountFilter}
       GROUP BY c.id, c.name, c.kind, cp.is_internal_transfer, month
-      ORDER BY month DESC, total ASC
+      ORDER BY month DESC, SUM(e.amount) ASC
     `);
 
     return { rows: rows.rows };

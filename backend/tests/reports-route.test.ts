@@ -198,6 +198,23 @@ describe.skipIf(!RUN)('/api/reports', () => {
   });
 
   describe('GET /api/reports/categories', () => {
+    it('orders rows within a month by numeric total, largest spend first', async () => {
+      // As text, '-5.00' sorts before '-50.00' ('.' < '0'), inverting the order.
+      const c2 = await app.inject({
+        method: 'POST', url: '/api/categories', headers: { cookie },
+        payload: { name: 'RepOrder', kind: 'expense' },
+      });
+      const cat2 = c2.json().category.id;
+      await makeTx({ accountId: accountEURId, date: '2026-06-15', amount: '-5.00', rawLabel: 'small', categoryId });
+      await makeTx({ accountId: accountEURId, date: '2026-06-16', amount: '-50.00', rawLabel: 'big', categoryId: cat2 });
+      const res = await app.inject({
+        method: 'GET', url: '/api/reports/categories?fromDate=2026-06-01&toDate=2026-06-30',
+        headers: { cookie },
+      });
+      const totals = res.json().rows.map((r: { total: string }) => Number(r.total));
+      expect(totals).toEqual([...totals].sort((a, b) => a - b));
+    });
+
     it('groups by category × month with signed totals', async () => {
       await makeTx({ accountId: accountEURId, date: '2026-06-15', amount: '-30.00', rawLabel: 'x', categoryId });
       await makeTx({ accountId: accountEURId, date: '2026-06-20', amount: '-20.00', rawLabel: 'y', categoryId });
