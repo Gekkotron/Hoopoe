@@ -12,7 +12,7 @@ describe('mcp package crypto', () => {
   });
   it('round-trips its own envelope', () => {
     const k = deriveContentKey(TOKEN);
-    const { nonce, ct } = encryptEnvelope(k, 'athena-mcp-v1|u|req', 'hello');
-    expect(decryptEnvelope(k, 'athena-mcp-v1|u|req', nonce, ct)).toBe('hello');
+    const { nonce, ct } = encryptEnvelope(k, 'hoopoe-mcp-v1|u|req', 'hello');
+    expect(decryptEnvelope(k, 'hoopoe-mcp-v1|u|req', nonce, ct)).toBe('hello');
   });
 });

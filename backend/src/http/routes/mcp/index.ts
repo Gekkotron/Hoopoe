@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { env } from '../../../env.js';
 import {
-  masterKey, unwrapKey, decryptEnvelope, encryptEnvelope,
+  masterKey, unwrapKey, decryptEnvelope, encryptEnvelope, envelopeAad,
 } from '../../../domain/mcp/crypto.js';
 import { getMcpByUsername } from '../../../domain/mcp/store.js';
 import { buildOp, UnknownOpError } from './ops.js';
@@ -36,7 +36,7 @@ export async function mcpRpcRoutes(app: FastifyInstance): Promise<void> {
     let inner: z.infer<typeof Inner>;
     try {
       key = unwrapKey(masterKey(env.SESSION_SECRET), mcp.keyWrapped);
-      const plaintext = decryptEnvelope(key, `hoopoe-mcp-v1|${user}|req`, nonce, ct);
+      const plaintext = decryptEnvelope(key, envelopeAad(user, 'req'), nonce, ct);
       const parsed = Inner.safeParse(JSON.parse(plaintext));
       if (!parsed.success) return reply.code(400).send({ error: 'invalid request' });
       inner = parsed.data;
@@ -51,7 +51,7 @@ export async function mcpRpcRoutes(app: FastifyInstance): Promise<void> {
 
     // From here, respond ENCRYPTED — including operation-level errors.
     const respond = (status: number, body: unknown) => {
-      const out = encryptEnvelope(key, `hoopoe-mcp-v1|${user}|res`, JSON.stringify({ status, body }));
+      const out = encryptEnvelope(key, envelopeAad(user, 'res'), JSON.stringify({ status, body }));
       return reply.code(200).send({ v: 1, nonce: out.nonce, ct: out.ct });
     };
 

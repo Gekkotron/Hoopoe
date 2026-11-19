@@ -1,4 +1,4 @@
-import { deriveContentKey, encryptEnvelope, decryptEnvelope } from './crypto.js';
+import { deriveContentKey, encryptEnvelope, decryptEnvelope, envelopeAad } from './crypto.js';
 import type { Config } from './config.js';
 
 type FetchImpl = typeof fetch;
@@ -19,7 +19,7 @@ export class RpcClient {
   }
 
   async rpc(op: string, args: Record<string, unknown>): Promise<unknown> {
-    const req = encryptEnvelope(this.key, `athena-mcp-v1|${this.cfg.user}|req`, JSON.stringify({ op, args, ts: Date.now() }));
+    const req = encryptEnvelope(this.key, envelopeAad(this.cfg.user, 'req'), JSON.stringify({ op, args, ts: Date.now() }));
     let res: Awaited<ReturnType<FetchImpl>>;
     try {
       res = await this.fetchImpl(`${this.cfg.apiUrl}/api/mcp/rpc`, {
@@ -37,7 +37,7 @@ export class RpcClient {
       throw new Error(mapError(res.status, { error: msg }));
     }
     const envelope = await res.json() as { nonce: string; ct: string };
-    const plain = JSON.parse(decryptEnvelope(this.key, `athena-mcp-v1|${this.cfg.user}|res`, envelope.nonce, envelope.ct)) as { status: number; body: unknown };
+    const plain = JSON.parse(decryptEnvelope(this.key, envelopeAad(this.cfg.user, 'res'), envelope.nonce, envelope.ct)) as { status: number; body: unknown };
     if (plain.status < 200 || plain.status >= 300) {
       throw new Error(mapError(plain.status, plain.body));
     }
