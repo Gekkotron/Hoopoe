@@ -6,7 +6,7 @@
 // Split out so the unit test can exercise the algorithm without
 // booting env.ts / db/client.ts (which require SESSION_SECRET and a
 // live driver).
-import { jaccardTokenSimilarity } from '../lib/label-similarity.js';
+import { tokenize } from '../lib/label-similarity.js';
 import { addDays } from '../domain/transfers/matching.js';
 
 // Detection knobs. Kept module-scoped so callers can't drift them
@@ -78,21 +78,57 @@ function majorityMode<T>(arr: T[]): T | null {
 }
 
 // Greedy clustering: for each transaction, join the first existing cluster
-// whose representative label passes the Jaccard threshold; otherwise start a
-// new cluster. O(n·k) with k = number of distinct merchant clusters — for a
-// year of transactions this is comfortably sub-second.
+// (in creation order) whose representative label passes the Jaccard
+// threshold; otherwise start a new cluster. A similarity >= SIMILARITY_THRESHOLD
+// (> 0) needs at least one shared token, so an inverted index from rep token to
+// cluster indices narrows the candidates instead of scanning every cluster for
+// every transaction (the full scan tokenised both labels per pair and took
+// tens of seconds on a 20k-transaction year). Labels with no tokens only
+// match reps with no tokens (similarity 1), tracked separately.
 function clusterByLabel(txs: DetectionInputTx[]): DetectionInputTx[][] {
-  const clusters: { rep: string; members: DetectionInputTx[] }[] = [];
+  const clusters: { repTokens: Set<string>; members: DetectionInputTx[] }[] = [];
+  const byToken = new Map<string, number[]>();
+  const emptyRepClusters: number[] = [];
+
+  const similarity = (a: Set<string>, b: Set<string>): number => {
+    if (a.size === 0 && b.size === 0) return 1;
+    if (a.size === 0 || b.size === 0) return 0;
+    let inter = 0;
+    for (const t of a) if (b.has(t)) inter++;
+    return inter / (a.size + b.size - inter);
+  };
+
   for (const t of txs) {
+    const tokens = tokenize(t.rawLabel);
+    let candidates: number[];
+    if (tokens.size === 0) {
+      candidates = emptyRepClusters;
+    } else {
+      const seen = new Set<number>();
+      for (const tok of tokens) {
+        for (const idx of byToken.get(tok) ?? []) seen.add(idx);
+      }
+      candidates = [...seen].sort((x, y) => x - y);
+    }
     let landed = false;
-    for (const c of clusters) {
-      if (jaccardTokenSimilarity(t.rawLabel, c.rep) >= SIMILARITY_THRESHOLD) {
+    for (const idx of candidates) {
+      const c = clusters[idx]!;
+      if (similarity(tokens, c.repTokens) >= SIMILARITY_THRESHOLD) {
         c.members.push(t);
         landed = true;
         break;
       }
     }
-    if (!landed) clusters.push({ rep: t.rawLabel, members: [t] });
+    if (!landed) {
+      const idx = clusters.length;
+      clusters.push({ repTokens: tokens, members: [t] });
+      if (tokens.size === 0) emptyRepClusters.push(idx);
+      for (const tok of tokens) {
+        const list = byToken.get(tok);
+        if (list) list.push(idx);
+        else byToken.set(tok, [idx]);
+      }
+    }
   }
   return clusters.map((c) => c.members);
 }

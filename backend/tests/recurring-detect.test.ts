@@ -177,3 +177,34 @@ describe('detectSeries', () => {
     expect(series[0]!.label).toBe('SPOTIFY PREMIUM');
   });
 });
+
+describe('detectSeries scaling', () => {
+  it('clusters a large history with many distinct merchants in bounded time', () => {
+    // 3 recurring merchants buried in 6000 one-off labels. A scan of every
+    // cluster per transaction took ~30s on this shape at 20k rows.
+    const txs: DetectionInputTx[] = [];
+    let id = 1;
+    for (let i = 0; i < 6000; i++) {
+      txs.push(tx(id++, '2026-02-10', '-10.00', `CARTE MERCHANT${i} PARIS`));
+    }
+    for (const name of ['NETFLIX', 'SPOTIFY', 'GYMCLUB']) {
+      txs.push(...monthly(2026, 6, '-9.99', name).map((t) => ({ ...t, id: id++ })));
+    }
+    const start = Date.now();
+    const series = detectSeries(txs);
+    expect(Date.now() - start).toBeLessThan(3000);
+    expect(series.map((s) => s.label).sort()).toEqual(['GYMCLUB', 'NETFLIX', 'SPOTIFY']);
+  });
+
+  it('still groups labels with no tokens together and apart from tokenised ones', () => {
+    const txs = [
+      tx(1, '2026-01-05', '-20.00', '1234'),
+      tx(2, '2026-02-04', '-20.00', '5678'),
+      tx(3, '2026-03-06', '-20.00', '9012'),
+      tx(4, '2026-01-05', '-20.00', 'NETFLIX'),
+    ];
+    const series = detectSeries(txs);
+    expect(series).toHaveLength(1);
+    expect([...series[0]!.memberIds].sort()).toEqual([1, 2, 3]);
+  });
+});
