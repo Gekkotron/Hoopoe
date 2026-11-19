@@ -65,6 +65,17 @@ export function toRecord(row: LoanRow): LoanRecord {
   };
 }
 
+// Drizzle column values from a parsed loan body. The wire/engine field
+// `insuranceAmount` is stored in the `insurance_monthly_amount` column
+// (`insuranceMonthlyAmount` key); an un-mapped key is silently dropped by
+// the insert/update builders, which would lose the flat premium.
+export function toColumns<T extends { insuranceAmount?: string | null }>(
+  values: T,
+): Omit<T, 'insuranceAmount'> & { insuranceMonthlyAmount: string | null } {
+  const { insuranceAmount, ...rest } = values;
+  return { ...rest, insuranceMonthlyAmount: insuranceAmount ?? null };
+}
+
 // Engine input from any object carrying the loan terms (a record, a parsed
 // request body). Copies only engine fields so extra keys never leak in.
 export function toTerms(t: LoanTerms): LoanTerms {

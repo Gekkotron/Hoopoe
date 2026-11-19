@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../../db/client.js';
 import { loans } from '../../../db/schema.js';
+import { toColumns } from '../../../domain/loans/record.js';
 import type { BackupDump } from './schema.js';
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -20,7 +21,7 @@ export async function restoreLoans(
       const { sourceLoan, createdAt, updatedAt, ...rest } = l;
       void sourceLoan; // re-linked in the second pass below
       return {
-        ...rest,
+        ...toColumns(rest),
         userId: uid,
         sourceLoanId: null,
         ...(createdAt ? { createdAt: new Date(createdAt) } : {}),

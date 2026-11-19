@@ -90,6 +90,20 @@ describe.skipIf(!RUN)('backup: loans', () => {
     expect(again.loans[0].updatedAt).toBe('2025-04-05T06:07:08.000Z');
   });
 
+  it('round-trips a flat insuranceAmount through export and import', async () => {
+    const dump = await exportDump();
+    const loan = {
+      name: 'Flat premium', kind: 'mortgage', isSimulation: false, sourceLoan: null,
+      currency: 'EUR', principal: '100000.00', startDate: '2026-02-05', annualRate: '3.5',
+      insuranceRate: '0', insuranceBasis: 'initial', insuranceAmount: '42.71', fees: '0.00', periods: [],
+      finalPeriod: { solve: 'payment', endDate: '2046-01' }, earlyRepayments: [],
+    };
+    const imp = await app.inject({ method: 'POST', url: '/api/backup/import', headers: { cookie }, payload: { ...dump, loans: [loan] } });
+    expect(imp.statusCode).toBe(200);
+    expect((await listLoans())[0] as unknown as { insuranceAmount: string }).toMatchObject({ insuranceAmount: '42.71' });
+    expect((await exportDump()).loans[0].insuranceAmount).toBe('42.71');
+  });
+
   it('rejects a malformed loan entry with 400', async () => {
     const dump = await exportDump();
     const bad = { ...dump.loans[0], annualRate: '150' };

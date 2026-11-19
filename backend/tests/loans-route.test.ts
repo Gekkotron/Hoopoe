@@ -51,6 +51,19 @@ describe.skipIf(!RUN)('/api/loans', () => {
     expect(summary.endDate).toBe('2046-01-05');
   });
 
+  it('persists a flat insuranceAmount on create and update', async () => {
+    const created = (await create(body({ insuranceAmount: '42.71' }))).json();
+    expect(created.loan.insuranceAmount).toBe('42.71');
+    const id = created.loan.id;
+    const got = await app.inject({ method: 'GET', url: `/api/loans/${id}`, headers: { cookie } });
+    expect(got.json().loan.insuranceAmount).toBe('42.71');
+    expect(got.json().schedule[0].insurance).toBe('42.71');
+    const put = await app.inject({
+      method: 'PUT', url: `/api/loans/${id}`, headers: { cookie }, payload: body({ insuranceAmount: '50.00' }),
+    });
+    expect(put.json().loan.insuranceAmount).toBe('50.00');
+  });
+
   it('lists loans with a summary and honours asOf', async () => {
     await create(body());
     const res = await app.inject({ method: 'GET', url: '/api/loans?asOf=2026-04-05', headers: { cookie } });
