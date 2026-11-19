@@ -21,13 +21,16 @@ export function Login() {
 
   const status = useQuery({
     queryKey: ['onboarding-status'],
-    queryFn: () => api<{ needsOnboarding: boolean }>('/api/onboarding/status'),
+    queryFn: () => api<{ needsOnboarding: boolean; registrationOpen?: boolean }>('/api/onboarding/status'),
   });
 
   const isOnboarding = status.data?.needsOnboarding ?? false;
-  // Even after the first user exists, the registration endpoint is open so a
-  // second person on the LAN can create their own account. The form toggles
-  // between "se connecter" and "créer un compte" via this flag.
+  // After the first user exists, a second person on the LAN can still create
+  // their own account unless the server runs with ALLOW_REGISTRATION=false.
+  // Hidden until the status loads so it never flashes on a closed server.
+  // Older servers omit `registrationOpen`; treat that as open.
+  const registrationOpen = status.isSuccess && status.data.registrationOpen !== false;
+  // The form toggles between "se connecter" and "créer un compte" via this flag.
   const [registerMode, setRegisterMode] = useState(false);
   const isRegister = isOnboarding || registerMode;
 
@@ -175,7 +178,7 @@ export function Login() {
             </button>
           </form>
 
-          {!isOnboarding && (
+          {!isOnboarding && registrationOpen && (
             <div className="mt-5 text-center text-sm text-ink-400">
               {registerMode ? (
                 <>

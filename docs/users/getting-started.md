@@ -70,10 +70,10 @@ to both paths unchanged.
 - A Linux or macOS host with Docker and Docker Compose. Windows works
   under WSL 2 but is not the primary target.
 - The ports `8000` (frontend), `8001` (backend), and `5432`
-  (PostgreSQL) free on `127.0.0.1`. Frontend and backend bind to every
-  host interface by default so other devices on your LAN can reach the
-  app; Postgres stays on loopback because the backend reaches it via
-  the compose network.
+  (PostgreSQL) free on the host. The frontend binds to every host
+  interface by default so other devices on your LAN can reach the app;
+  the backend and Postgres are published on `127.0.0.1` only (the
+  frontend proxies `/api/*` to the backend over the compose network).
 - A modern browser.
 
 Hoopoe does **not** need a domain name, TLS certificates, or a public

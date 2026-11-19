@@ -32,6 +32,8 @@ n'est pas définie. Copiez `.env.example` en `.env` avant de lancer
 | `DATABASE_URL` | *(aucun)* | URL Postgres | **Requise quand `DB_DRIVER=postgres`.** URL complète, ex. `postgres://athena:…@db:5432/athena`. |
 | `COOKIE_SECURE` | `false` | `true` / `false` / `1` / `0` | Marque le cookie de session comme `Secure`. À laisser sur `false` en déploiement LAN HTTP simple — sinon le navigateur rejette le cookie et la connexion échoue silencieusement. À passer à `true` derrière un reverse proxy HTTPS. |
 | `NODE_ENV` | `development` | `development` / `production` / `test` | Contrôle le format des logs Fastify (`pino-pretty` en dev, JSON sinon) et active le serveur de fichiers statiques intégré quand `SERVE_STATIC` n'est pas défini. Docker Compose fixe cette variable à `production`. |
+| `TRUST_PROXY` | *(non défini — `false`)* | `true` / nombre de sauts / liste d'IP, CIDR ou presets séparés par des virgules (`loopback`, `linklocal`, `uniquelocal`) | Transmis à l'option `trustProxy` de Fastify. Non défini ou `false` : `X-Forwarded-For` est ignoré (bureau, `npm run dev` nu). Docker Compose le fixe à `loopback,uniquelocal` pour que le conteneur nginx soit de confiance et que les limites de débit par client (connexion, 2FA, inscription) s'appuient sur la vraie IP du navigateur ; nginx écrase `X-Forwarded-For` avec `$remote_addr`, un client ne peut donc pas y injecter d'entrées. Ne faites confiance qu'aux adresses qui sont réellement votre proxy. Si vous placez un autre reverse proxy HTTPS devant nginx, tous les clients partagent l'IP de ce proxy, sauf si vous configurez vous-même `real_ip` dans nginx. |
+| `ALLOW_REGISTRATION` | `true` | `true` / `false` | Le premier compte (onboarding) peut toujours être créé. Dès qu'un utilisateur existe, `false` fait renvoyer 403 `{ "error": "registration_closed" }` à `POST /api/onboarding/create` et masque le lien « Créer un compte » sur la page de connexion. Compose le lit depuis `.env`. À passer à `false` quand tout le foyer a son compte. |
 | `PORT` | `3000` | entier | Port sur lequel Fastify écoute dans le conteneur. Docker Compose mappe `BACKEND_PORT` sur l'hôte vers ce port. |
 | `DB_DRIVER` | `postgres` | `postgres` / `pglite` | Sélectionne le backend SQL. `postgres` utilise `pg.Pool` (parcours Docker). `pglite` utilise Postgres embarqué en WASM (Tauri desktop, tests). |
 | `PGLITE_PATH` | *(non défini — en mémoire)* | chemin fichier | Utilisé uniquement quand `DB_DRIVER=pglite`. Définie, PGlite persiste dans ce répertoire ; non définie, base éphémère en mémoire. |
@@ -58,8 +60,8 @@ l'exécution.
 
 | Variable | Défaut | Effet |
 | --- | --- | --- |
-| `FRONTEND_PORT` | `8000` | Port hôte mappé sur le port 80 du conteneur frontend. Bindé sur `0.0.0.0` pour que les autres appareils du LAN atteignent l'application. |
-| `BACKEND_PORT` | `8001` | Port hôte mappé sur le port 3000 du conteneur backend. Bindé sur `0.0.0.0` pour les tests API directs ; le frontend proxifie les appels `/api/*` via nginx en production. |
+| `FRONTEND_PORT` | `8000` | Port hôte mappé sur le port 8080 du conteneur frontend. Bindé sur `0.0.0.0` pour que les autres appareils du LAN atteignent l'application. |
+| `BACKEND_PORT` | `8001` | Port hôte mappé sur le port 3000 du conteneur backend. Publié uniquement sur `127.0.0.1` : `curl http://127.0.0.1:8001/health` fonctionne depuis l'hôte, mais les autres appareils du LAN ne l'atteignent pas ; ils passent par le frontend, dont nginx proxifie tous les appels `/api/*` (y compris `/api/mcp/rpc`) vers le backend. |
 
 Évitez `6000`, `6666`, `6665–6669` et `6697` — Chrome les bloque avec
 `ERR_UNSAFE_PORT`.
@@ -68,8 +70,8 @@ l'exécution.
 
 | Service | Port hôte | Port conteneur | Bind |
 | --- | --- | --- | --- |
-| Frontend (nginx) | `${FRONTEND_PORT:-8000}` | `80` | `0.0.0.0` (accessible LAN) |
-| Backend (Fastify) | `${BACKEND_PORT:-8001}` | `3000` | `0.0.0.0` (accessible LAN) |
+| Frontend (nginx) | `${FRONTEND_PORT:-8000}` | `8080` | `0.0.0.0` (accessible LAN) |
+| Backend (Fastify) | `${BACKEND_PORT:-8001}` | `3000` | `127.0.0.1` uniquement (jamais sur le LAN) |
 | PostgreSQL | `5432` | `5432` | `127.0.0.1` uniquement (jamais sur le LAN) |
 
 Commentez le bloc `ports:` du service `db` dans `docker-compose.yml` si vous

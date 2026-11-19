@@ -59,7 +59,7 @@ Le reste de cette page suit le parcours **Docker**. Si vous avez choisi le burea
 ## Parcours Docker — ce qu'il vous faut
 
 - Un hôte Linux ou macOS avec Docker et Docker Compose. Windows fonctionne sous WSL 2 mais n'est pas la cible principale.
-- Les ports `8000` (frontend), `8001` (backend) et `5432` (PostgreSQL) libres sur `127.0.0.1`. Frontend et backend écoutent sur toutes les interfaces par défaut pour que les autres appareils du LAN atteignent l'application ; Postgres reste sur loopback, le backend l'atteint via le réseau Compose.
+- Les ports `8000` (frontend), `8001` (backend) et `5432` (PostgreSQL) libres sur l'hôte. Le frontend écoute sur toutes les interfaces par défaut pour que les autres appareils du LAN atteignent l'application ; le backend et Postgres ne sont publiés que sur `127.0.0.1` (le frontend relaie `/api/*` vers le backend via le réseau Compose).
 - Un navigateur moderne.
 
 Hoopoe n'a **pas** besoin de nom de domaine, de certificat TLS ou d'IP publique. Il tourne sur votre LAN et y reste.

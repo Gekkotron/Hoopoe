@@ -10,7 +10,7 @@ export function registerSimpleHandlers(): void {
   // lockConfigured: false disarms the idle timer and hides the eye button —
   // both without any component special-casing (see LockContext).
   registerHandler('GET', '/api/auth/lock-status', () => ({ mode: 'session', lockConfigured: false }));
-  registerHandler('GET', '/api/onboarding/status', () => ({ needsOnboarding: false }));
+  registerHandler('GET', '/api/onboarding/status', () => ({ needsOnboarding: false, registrationOpen: true }));
   registerHandler('GET', '/health', () => ({ ok: true, mode: 'demo' as const }));
   registerHandler('GET', '/api/categories', () => ({
     categories: getState().categories.map((c) => ({

@@ -12,8 +12,9 @@ de sauvegarde, un appel MCP vers un modèle que vous connectez vous-même).
 
 ## Modèle de sécurité
 
-**LAN-only par défaut.** Le stack Docker Compose expose le frontend et le
-backend sur votre hôte, et la posture recommandée est de garder Hoopoe
+**LAN-only par défaut.** Le stack Docker Compose expose le frontend
+(nginx) sur les interfaces réseau de votre hôte et publie le backend et
+Postgres sur `127.0.0.1` uniquement, et la posture recommandée est de garder Hoopoe
 accessible uniquement depuis votre réseau local — derrière votre box, pas
 exposé sur l'internet public. Le build Tauri (application de bureau) va
 un cran plus loin : il se lie à `127.0.0.1` sur un port aléatoire et
@@ -34,14 +35,18 @@ aléatoire par utilisateur. Ni le mot de passe brut ni une représentation
 réversible ne sont stockés.
 
 **Inscription ouverte sur le LAN.** L'onboarding crée le premier compte
-utilisateur, et l'endpoint reste ouvert ensuite : toute personne qui peut
+utilisateur, et par défaut l'endpoint reste ouvert ensuite : toute personne qui peut
 atteindre l'application sur votre réseau peut créer son propre compte
 depuis l'écran de connexion (« Créer un compte »). Les données de chaque
 compte sont totalement isolées — un autre utilisateur ne peut jamais voir
 vos transactions — et les noms d'utilisateur sont uniques, donc personne ne
 peut s'enregistrer par-dessus le vôtre. L'inscription est limitée en débit
-(rate-limit) ; pour bloquer entièrement les nouvelles inscriptions,
-restreignez l'accès via un pare-feu ou un VPN (voir
+(rate-limit) ; pour bloquer les nouvelles inscriptions une fois que
+chacun a son compte, définissez `ALLOW_REGISTRATION=false` dans `.env` et
+redémarrez le stack. Le premier compte peut toujours être créé ; ensuite
+l'endpoint renvoie 403 `registration_closed` et l'écran de connexion
+masque le lien « Créer un compte ». Pour un accès plus strict, ajoutez un
+pare-feu ou un VPN (voir
 [SECURITY.md](https://github.com/Gekkotron/Hoopoe/blob/main/SECURITY.md)).
 
 **Chemin Desktop.** Le build Tauri tourne avec `AUTH_MODE=none` : pas de

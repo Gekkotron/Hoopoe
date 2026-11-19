@@ -61,7 +61,7 @@ Claude Desktop and several other MCP clients):
       "command": "node",
       "args": ["/absolute/path/to/Hoopoe/mcp/dist/index.js"],
       "env": {
-        "HOOPOE_API_URL": "http://<mini-pc-host>:8001",
+        "HOOPOE_API_URL": "http://<mini-pc-host>:8000",
         "HOOPOE_MCP_USER": "<your-hoopoe-username>",
         "HOOPOE_MCP_TOKEN": "<paste-token-here>",
         "HOOPOE_STATEMENTS_DIR": "/Users/you/HoopoeStatements"
@@ -74,7 +74,10 @@ Claude Desktop and several other MCP clients):
 Replace the placeholders:
 
 - `HOOPOE_API_URL` — the URL of your Hoopoe backend (e.g. the LAN address
-  and port where `backend` is reachable). Do not include a trailing slash.
+  and port where the Hoopoe frontend is reachable, e.g. `http://<mini-pc-host>:8000`:
+  nginx proxies `/api/*`, including the MCP endpoint, to the backend). Do not
+  include a trailing slash. The backend's own port `8001` is published on
+  `127.0.0.1` only, so other machines cannot use it.
 - `HOOPOE_MCP_USER` — your Hoopoe login username.
 - `HOOPOE_MCP_TOKEN` — the token generated in step 1.
 - `HOOPOE_STATEMENTS_DIR` *(optional)* — a folder your statement PDFs live in.

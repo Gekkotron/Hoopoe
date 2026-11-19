@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { parseTrustProxy } from './lib/trustProxy.js';
 
 const boolish = z
   .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
@@ -31,6 +32,18 @@ const Env = z
     // operators know to configure it before exposing the app beyond the LAN.
     // Prometheus scrapers can pass the token via `bearer_token`/`bearer_token_file`.
     METRICS_TOKEN: z.string().min(16).optional(),
+    // Which reverse-proxy hops may set the client address via X-Forwarded-For
+    // (see lib/trustProxy.ts). Off by default: the desktop sidecar and a bare
+    // `npm run dev` have no proxy, and trusting the header there would let any
+    // client pick its own rate-limit bucket. Docker Compose sets
+    // `loopback,uniquelocal` so the nginx container is trusted and the login /
+    // 2FA / registration limits key on the real browser address.
+    TRUST_PROXY: z.string().optional().transform(parseTrustProxy),
+    // Whether /api/onboarding/create accepts new accounts once a user exists.
+    // The first account is always allowed so a fresh install can be set up.
+    // On by default for multi-user households; set to 0/false once everyone
+    // has an account so other devices on the LAN cannot sign up.
+    ALLOW_REGISTRATION: boolish.default(true),
     // Default false because self-hosted LAN deployments typically run over plain
     // HTTP. Set to true when running behind an HTTPS-terminating reverse proxy.
     COOKIE_SECURE: boolish.default(false),

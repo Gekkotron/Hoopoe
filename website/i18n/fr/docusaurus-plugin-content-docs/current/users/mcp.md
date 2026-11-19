@@ -40,7 +40,7 @@ Pointez votre client MCP vers le serveur construit, en passant les trois variabl
       "command": "node",
       "args": ["/chemin/absolu/vers/Hoopoe/mcp/dist/index.js"],
       "env": {
-        "HOOPOE_API_URL": "http://<mini-pc-host>:8001",
+        "HOOPOE_API_URL": "http://<mini-pc-host>:8000",
         "HOOPOE_MCP_USER": "<votre-nom-utilisateur-hoopoe>",
         "HOOPOE_MCP_TOKEN": "<coller-le-jeton-ici>",
         "HOOPOE_STATEMENTS_DIR": "/Users/vous/RelevésHoopoe"
@@ -52,7 +52,7 @@ Pointez votre client MCP vers le serveur construit, en passant les trois variabl
 
 Remplacez les placeholders :
 
-- `HOOPOE_API_URL` — l'URL de votre backend Hoopoe (par exemple l'adresse LAN et le port où `backend` est joignable). Ne pas mettre de barre oblique finale.
+- `HOOPOE_API_URL` — l'URL de votre backend Hoopoe (par exemple l'adresse LAN et le port où le frontend Hoopoe est joignable, soit `http://<mini-pc-host>:8000` : nginx relaie `/api/*`, y compris le point d'accès MCP, vers le backend). Ne pas mettre de barre oblique finale. Le port `8001` du backend n'est publié que sur `127.0.0.1`, les autres machines ne peuvent donc pas l'utiliser.
 - `HOOPOE_MCP_USER` — votre nom d'utilisateur de login Hoopoe.
 - `HOOPOE_MCP_TOKEN` — le jeton généré à l'étape 1.
 - `HOOPOE_STATEMENTS_DIR` *(optionnel)* — un dossier contenant vos PDF de relevés. Quand il est défini, `reconcile_statement` résout un **nom de fichier nu** (par exemple `avril.pdf`) contre ce dossier, ce qui vous évite de taper un chemin absolu complet. Un `~` initial est étendu, et si un fichier n'est pas trouvé, l'erreur liste les `.pdf` réellement présents dans le dossier.

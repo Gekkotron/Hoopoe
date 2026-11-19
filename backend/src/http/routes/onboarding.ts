@@ -4,6 +4,7 @@ import { hash, Algorithm } from '@node-rs/argon2';
 import { count } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import { categories, users } from '../../db/schema.js';
+import { env } from '../../env.js';
 
 // OWASP 2024 minimum for argon2id: 19 MiB memory, 2 iterations, parallelism 1.
 const ARGON2_OPTS = {
@@ -25,21 +26,27 @@ async function hasUser(): Promise<boolean> {
 
 export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
   app.get('/api/onboarding/status', async () => {
-    return { needsOnboarding: !(await hasUser()) };
+    const needsOnboarding = !(await hasUser());
+    return {
+      needsOnboarding,
+      // Drives the login page's "create an account" link.
+      registrationOpen: needsOnboarding || env.ALLOW_REGISTRATION,
+    };
   });
 
-  // Registration is open by design on a LAN-only install — rate limit so it
-  // can't be flooded if the URL ever leaks somewhere it shouldn't.
+  // Rate limited (per client, see TRUST_PROXY) so it can't be flooded.
   app.post('/api/onboarding/create', {
     config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
   }, async (req, reply) => {
-    // Multi-user mode (migration 0007): the endpoint now accepts new
-    // registrations after the first user. Behaves as "register" once the
-    // initial onboarding is past. Open by design because the app is LAN-only;
-    // restrict via firewall/VPN if you need stricter control.
+    // Multi-user mode (migration 0007): after the first user this endpoint
+    // acts as "register". ALLOW_REGISTRATION (default on) closes it; the
+    // first account always goes through so a fresh install can be set up.
     const parsed = CreateBody.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'invalid input', issues: parsed.error.issues });
+    }
+    if (!env.ALLOW_REGISTRATION && (await hasUser())) {
+      return reply.code(403).send({ error: 'registration_closed' });
     }
     const { username, password } = parsed.data;
 

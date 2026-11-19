@@ -96,8 +96,8 @@ echo
 echo "OK: .env généré (permissions 600)."
 echo "  Postgres user : $POSTGRES_USER"
 echo "  Postgres db   : $POSTGRES_DB"
-echo "  Frontend port : 127.0.0.1:$FRONTEND_PORT"
-echo "  Backend port  : 127.0.0.1:$BACKEND_PORT"
+echo "  Frontend port : $FRONTEND_PORT (accessible depuis le LAN : http://<ip-de-l-hôte>:$FRONTEND_PORT)"
+echo "  Backend port  : 127.0.0.1:$BACKEND_PORT (loopback uniquement)"
 echo
 echo "Prochaine étape:"
 echo "  docker compose up --build"
