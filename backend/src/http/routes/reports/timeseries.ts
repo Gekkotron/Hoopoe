@@ -39,7 +39,7 @@ export function registerTimeseriesRoute(app: FastifyInstance): void {
         FROM transactions t
         JOIN accounts a ON a.id = t.account_id
         WHERE t.user_id = ${uid}
-          ${fromDate ? sql`AND t.date >= ${fromDate}` : sql``}
+          AND t.date >= a.opening_date
           ${toDate ? sql`AND t.date <= ${toDate}` : sql``}
         GROUP BY t.account_id, a.currency, bucket
       ),
@@ -48,7 +48,7 @@ export function registerTimeseriesRoute(app: FastifyInstance): void {
           a.id AS account_id,
           a.currency,
           'opening' AS kind,
-          to_char(a.opening_date::timestamp, 'YYYY-MM-DD') AS bucket,
+          to_char(date_trunc(${sql.raw(truncFmt)}, a.opening_date::timestamp), 'YYYY-MM-DD') AS bucket,
           a.opening_balance AS delta
         FROM accounts a
         WHERE a.user_id = ${uid}
@@ -69,11 +69,12 @@ export function registerTimeseriesRoute(app: FastifyInstance): void {
         FROM with_opening
         GROUP BY account_id, currency, bucket
       )
-      -- Clip the opening bucket to the requested window AFTER the cumulative
-      -- sum runs, so the first surviving row's cumulative already includes
-      -- the opening balance instead of the client receiving a stray point
-      -- dated years before fromDate (accounts opened in 2020 answering a
-      -- 2026 range).
+      -- Pre-window transactions stay in per_bucket (only toDate and the
+      -- opening date bound it) so the cumulative carries them. Clip to the
+      -- requested window AFTER the cumulative sum runs, so the first
+      -- surviving row's cumulative already includes the opening balance
+      -- instead of the client receiving a stray point dated years before
+      -- fromDate (accounts opened in 2020 answering a 2026 range).
       SELECT
         account_id,
         currency,
@@ -82,7 +83,9 @@ export function registerTimeseriesRoute(app: FastifyInstance): void {
         cumulative::text AS cumulative
       FROM with_cumulative
       WHERE 1 = 1
-        ${fromDate ? sql`AND bucket >= ${fromDate}` : sql``}
+        ${fromDate
+          ? sql`AND bucket >= to_char(date_trunc(${sql.raw(truncFmt)}, ${fromDate}::date::timestamp), 'YYYY-MM-DD')`
+          : sql``}
         ${toDate ? sql`AND bucket <= ${toDate}` : sql``}
       ORDER BY account_id, bucket
     `);

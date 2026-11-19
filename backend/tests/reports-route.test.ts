@@ -154,6 +154,40 @@ describe.skipIf(!RUN)('/api/reports', () => {
       expect(juneRows).toHaveLength(1);
     });
 
+    it('carries pre-fromDate transactions into the first in-window cumulative', async () => {
+      await makeTx({ accountId: accountEURId, date: '2026-05-10', amount: '-200.00', rawLabel: 'pre' });
+      await makeTx({ accountId: accountEURId, date: '2026-06-15', amount: '-100.00', rawLabel: 'in' });
+      const res = await app.inject({
+        method: 'GET', url: '/api/reports/timeseries?fromDate=2026-06-01&display=none',
+        headers: { cookie },
+      });
+      expect(res.statusCode).toBe(200);
+      const rows = res.json().points.filter((p: { account_id: number }) => p.account_id === accountEURId);
+      // 1000 opening - 200 (May, before the window) - 100 = 700.
+      expect(rows).toHaveLength(1);
+      expect(Number(rows[0].cumulative)).toBeCloseTo(700);
+    });
+
+    it('folds the opening balance into the first month bucket (granularity=month)', async () => {
+      // Opened mid-month: the opening row must be bucketed to the 1st like
+      // the transactions, not left on its own 2025-03-17 bucket.
+      const acc = await app.inject({
+        method: 'POST', url: '/api/accounts',
+        headers: { cookie },
+        payload: { name: 'RMID', type: 'checking', currency: 'EUR', openingBalance: '300', openingDate: '2025-03-17' },
+      });
+      const midId = acc.json().account.id;
+      await makeTx({ accountId: midId, date: '2025-03-20', amount: '-10.00', rawLabel: 'mar' });
+      const res = await app.inject({
+        method: 'GET', url: '/api/reports/timeseries?granularity=month&display=none',
+        headers: { cookie },
+      });
+      const rows = res.json().points.filter((p: { account_id: number }) => p.account_id === midId);
+      expect(rows).toHaveLength(1);
+      expect(rows[0].bucket).toBe('2025-03-01');
+      expect(Number(rows[0].cumulative)).toBeCloseTo(290);
+    });
+
     it('rejects an invalid date range with 400', async () => {
       const res = await app.inject({
         method: 'GET', url: '/api/reports/timeseries?fromDate=15-06-2026',
