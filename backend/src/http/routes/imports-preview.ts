@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { inferFormat, resolveAccountFromFilename } from '../../domain/imports/import-service.js';
 import { previewImport } from '../../domain/imports/preview-service.js';
+import { isAccountOwned } from '../../domain/ownership.js';
 import { userId } from '../plugins/auth.js';
 
 export async function importsPreviewRoutes(app: FastifyInstance): Promise<void> {
@@ -35,6 +36,9 @@ export async function importsPreviewRoutes(app: FastifyInstance): Promise<void> 
       return reply.code(400).send({
         error: 'cannot determine target account; pass ?accountId=N or configure a filename pattern',
       });
+    }
+    if (!(await isAccountOwned(userId(req), accountId))) {
+      return reply.code(404).send({ error: 'account_not_found' });
     }
 
     try {

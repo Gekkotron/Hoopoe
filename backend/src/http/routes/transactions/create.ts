@@ -6,6 +6,7 @@ import { normalizeLabel } from '../../../domain/imports/normalize.js';
 import { computeDedupKey } from '../../../domain/imports/dedup.js';
 import { categorizeOne, loadRuleEngine } from '../../../domain/rules/recategorize.js';
 import { afterTransactionInserted, computeCurrentBalance } from '../../../domain/notifications/hooks.js';
+import { areCategoriesOwned } from '../../../domain/ownership.js';
 import { userId } from '../../plugins/auth.js';
 import { CreateBody } from './schemas.js';
 import { isPgError } from './helpers.js';
@@ -27,6 +28,9 @@ export function registerCreate(app: FastifyInstance): void {
       .from(accounts)
       .where(and(eq(accounts.id, v.accountId), eq(accounts.userId, uid)));
     if (!acc) return reply.code(404).send({ error: 'account_not_found' });
+    if (v.categoryId != null && !(await areCategoriesOwned(uid, [v.categoryId]))) {
+      return reply.code(400).send({ error: 'compte ou catégorie inconnu' });
+    }
 
     const amount = Number(v.amount).toFixed(2);
     const normalized = normalizeLabel(v.rawLabel);

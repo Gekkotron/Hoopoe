@@ -4,6 +4,7 @@ import { and, eq, desc } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import { accountFilenamePatterns } from '../../db/schema.js';
 import { isPgError, parseId } from '../../lib/http.js';
+import { isAccountOwned } from '../../domain/ownership.js';
 import { userId } from '../plugins/auth.js';
 
 const CreateBody = z.object({
@@ -33,6 +34,9 @@ export async function patternRoutes(app: FastifyInstance): Promise<void> {
     if (!parsed.success) {
       return reply.code(400).send({ error: 'invalid input', issues: parsed.error.issues });
     }
+    if (!(await isAccountOwned(uid, parsed.data.accountId))) {
+      return reply.code(400).send({ error: 'unknown accountId' });
+    }
     try {
       const [created] = await db
         .insert(accountFilenamePatterns)
@@ -57,6 +61,9 @@ export async function patternRoutes(app: FastifyInstance): Promise<void> {
     }
     if (Object.keys(parsed.data).length === 0) {
       return reply.code(400).send({ error: 'no fields to update' });
+    }
+    if (parsed.data.accountId !== undefined && !(await isAccountOwned(uid, parsed.data.accountId))) {
+      return reply.code(400).send({ error: 'unknown accountId' });
     }
     const [updated] = await db
       .update(accountFilenamePatterns)

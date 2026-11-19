@@ -62,7 +62,7 @@ export function registerList(app: FastifyInstance): void {
         (
           a.opening_balance + COALESCE(
             (SELECT SUM(t.amount) FROM transactions t
-              WHERE t.account_id = a.id AND t.date >= a.opening_date),
+              WHERE t.account_id = a.id AND t.user_id = a.user_id AND t.date >= a.opening_date),
             0
           )
         )::text                                                AS current_balance,
@@ -75,7 +75,7 @@ export function registerList(app: FastifyInstance): void {
           END)
           + COALESCE(
               (SELECT SUM(t.amount) FROM transactions t
-                WHERE t.account_id = a.id AND t.date >= a.opening_date
+                WHERE t.account_id = a.id AND t.user_id = a.user_id AND t.date >= a.opening_date
                   AND (
                     CASE
                       WHEN t.lock_years IS NOT NULL
@@ -88,9 +88,9 @@ export function registerList(app: FastifyInstance): void {
               0)
         )::text                                                AS available_balance,
         (SELECT COUNT(*)::int FROM transactions t
-          WHERE t.account_id = a.id)                           AS transaction_count,
+          WHERE t.account_id = a.id AND t.user_id = a.user_id)                           AS transaction_count,
         (SELECT COUNT(*)::int FROM transactions t
-          WHERE t.account_id = a.id AND t.date >= a.opening_date)
+          WHERE t.account_id = a.id AND t.user_id = a.user_id AND t.date >= a.opening_date)
                                                                AS counted_transaction_count,
         -- IBAN: synced value wins over the manual accounts.iban. The schema
         -- allows several bca rows per account (no uniqueness on account_id),
@@ -114,7 +114,7 @@ export function registerList(app: FastifyInstance): void {
             a.opening_balance + COALESCE(
               (SELECT SUM(t.amount) FROM transactions t
                 LEFT JOIN categories c ON c.id = t.category_id
-                WHERE t.account_id = a.id AND t.date >= a.opening_date
+                WHERE t.account_id = a.id AND t.user_id = a.user_id AND t.date >= a.opening_date
                   AND (c.kind IS NULL OR c.kind <> 'income')),
               0
             )

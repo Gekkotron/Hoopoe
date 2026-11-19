@@ -10,6 +10,7 @@ import {
 } from '../../domain/imports/import-service.js';
 import { importPdf } from '../../domain/imports/pdf/index.js';
 import { importPhoto, PhotoTooLargeError, PhotoUnsupportedMimeError } from '../../domain/imports/photo/index.js';
+import { isAccountOwned } from '../../domain/ownership.js';
 import { userId } from '../plugins/auth.js';
 import { flushSnapshots } from '../../db/snapshotScheduler.js';
 import { errCode, errMessage } from './imports-errors.js';
@@ -86,6 +87,9 @@ export async function importsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const uid = userId(req);
+    if (!(await isAccountOwned(uid, accountId))) {
+      return reply.code(404).send({ error: 'account_not_found' });
+    }
 
     let skipParsedIndices: number[] | undefined;
     const rawSkip = (data.fields as Record<string, { value?: unknown } | undefined>).skipParsedIndices?.value;
@@ -146,6 +150,9 @@ export async function importsRoutes(app: FastifyInstance): Promise<void> {
     const accountId = q.accountId ? Number(q.accountId) : null;
     if (!accountId || !Number.isInteger(accountId) || accountId <= 0) {
       return reply.code(400).send({ error: 'invalid accountId' });
+    }
+    if (!(await isAccountOwned(userId(req), accountId))) {
+      return reply.code(404).send({ error: 'account_not_found' });
     }
     try {
       const result = await importPhoto({

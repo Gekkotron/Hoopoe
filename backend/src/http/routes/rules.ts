@@ -2,10 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '../../db/client.js';
-import { categories, ruleSplits, rules, transactions } from '../../db/schema.js';
+import { ruleSplits, rules, transactions } from '../../db/schema.js';
 import { compileRule, isSafeRulePattern, type Rule } from '../../domain/rules/matcher.js';
 import { recategorizeAll } from '../../domain/rules/recategorize.js';
 import { isPgError, parseId } from '../../lib/http.js';
+import { areCategoriesOwned } from '../../domain/ownership.js';
 import { userId } from '../plugins/auth.js';
 
 // A rule can carry an optional splits payload (migration 0042) — when
@@ -49,17 +50,6 @@ function validateSplitsPayload(splits: z.infer<typeof SplitsArray>): string | nu
   return null;
 }
 
-async function assertCategoriesOwned(
-  uid: number,
-  ids: readonly number[],
-): Promise<boolean> {
-  const wanted = Array.from(new Set(ids));
-  const owned = await db
-    .select({ id: categories.id })
-    .from(categories)
-    .where(and(eq(categories.userId, uid), inArray(categories.id, wanted)));
-  return owned.length === wanted.length;
-}
 
 const RecatBody = z.object({ preserveManual: z.boolean().default(true) });
 
@@ -128,7 +118,7 @@ export async function rulesRoutes(app: FastifyInstance): Promise<void> {
       const sumError = validateSplitsPayload(splits);
       if (sumError) return reply.code(400).send({ error: sumError });
       const catIds = [ruleData.categoryId, ...splits.map((s) => s.categoryId)];
-      if (!(await assertCategoriesOwned(uid, catIds))) {
+      if (!(await areCategoriesOwned(uid, catIds))) {
         return reply.code(400).send({ error: 'catégorie inconnue' });
       }
     }
@@ -186,7 +176,7 @@ export async function rulesRoutes(app: FastifyInstance): Promise<void> {
       if (sumError) return reply.code(400).send({ error: sumError });
       const catIds = splitsPatch.map((s) => s.categoryId);
       if (ruleFields.categoryId) catIds.push(ruleFields.categoryId);
-      if (!(await assertCategoriesOwned(uid, catIds))) {
+      if (!(await areCategoriesOwned(uid, catIds))) {
         return reply.code(400).send({ error: 'catégorie inconnue' });
       }
     }

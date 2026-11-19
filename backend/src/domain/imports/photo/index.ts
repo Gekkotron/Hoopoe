@@ -3,6 +3,7 @@ import { db } from '../../../db/client.js';
 import { pdfImportDrafts } from '../../../db/schema.js';
 import { runOcrJob } from '../pdf/index.js';
 import type { ImportPdfResult } from '../pdf/index.js';
+import { assertOwnedAccount } from '../../ownership.js';
 
 const MAX_PHOTO_BYTES = 25 * 1024 * 1024;
 
@@ -50,6 +51,7 @@ export async function importPhoto(opts: {
   userId: number;
   buffer: Buffer;
 }): Promise<ImportPdfResult> {
+  await assertOwnedAccount(opts.userId, opts.accountId);
   if (opts.buffer.length > MAX_PHOTO_BYTES) throw new PhotoTooLargeError(opts.buffer.length);
   const mime = detectImageMime(opts.buffer);
   if (!mime) throw new PhotoUnsupportedMimeError();
