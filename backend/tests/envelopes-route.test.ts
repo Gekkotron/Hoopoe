@@ -383,4 +383,47 @@ describe.skipIf(!RUN)('GET /api/envelopes/report', () => {
     expect(body.rows[0].spend).toBe('150.00');
     expect(body.rows[0].balance).toBe('150.00');
   });
+
+  it('rejects a month outside 01..12 with 400 instead of a Postgres 500', async () => {
+    const r = await app.inject({
+      method: 'GET', url: '/api/envelopes/report?month=2026-13',
+      headers: { cookie },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
+  // A split transaction must count each split in its own category (as the
+  // categories / budget reports do), not its whole amount in the parent's.
+  it('attributes a split transaction per split category', async () => {
+    const b = await app.inject({
+      method: 'POST', url: '/api/categories', headers: { cookie },
+      payload: { name: 'Hygiene', kind: 'expense' },
+    });
+    const expB = b.json().category.id;
+    const created = await app.inject({
+      method: 'POST', url: '/api/transactions', headers: { cookie },
+      payload: {
+        accountId: acct, date: '2026-06-25', amount: '-100.00',
+        rawLabel: 'Supermarche', normalizedLabel: 'supermarche',
+        categoryId: expA, dedupKey: 'split-1',
+      },
+    });
+    const txId = created.json().transaction.id;
+    const put = await app.inject({
+      method: 'PUT', url: `/api/transactions/${txId}/splits`, headers: { cookie },
+      payload: { splits: [
+        { categoryId: expA, amount: '-60.00' },
+        { categoryId: expB, amount: '-40.00' },
+      ] },
+    });
+    expect(put.statusCode).toBe(200);
+    const r = await app.inject({
+      method: 'GET', url: '/api/envelopes/report?month=2026-06',
+      headers: { cookie },
+    });
+    const rows = r.json().rows as Array<{ categoryId: number; spend: string }>;
+    // Previous test left Alimentation at 150.00 net; the split adds 60.00.
+    expect(rows.find((x) => x.categoryId === expA)!.spend).toBe('210.00');
+    expect(rows.find((x) => x.categoryId === expB)!.spend).toBe('40.00');
+  });
 });
