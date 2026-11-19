@@ -584,6 +584,9 @@ add `--since 5m` to get a full window. Redact any lines that contain
 
 ### Health endpoint
 
+Run these from the host machine itself: the backend port is published on
+`127.0.0.1` only.
+
 ```sh
 curl -s http://localhost:8001/health
 ```

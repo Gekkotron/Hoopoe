@@ -56,7 +56,10 @@ export async function build(opts?: { logger?: boolean }): Promise<FastifyInstanc
   const logger = opts?.logger === false
     ? false
     : (env.NODE_ENV === 'development' ? { transport: { target: 'pino-pretty' } } : true);
-  const app = Fastify({ logger });
+  // trustProxy decides what `req.ip` is, and so which bucket each rate limit
+  // uses. Behind the Docker nginx it must trust that hop, or every browser
+  // shares the nginx container's address (see env.ts TRUST_PROXY).
+  const app = Fastify({ logger, trustProxy: env.TRUST_PROXY });
 
   // Global error handler: bare `throw`s from route handlers land here instead
   // of defaulting to a generic 500. Fastify's built-in validation errors and
@@ -130,7 +133,8 @@ export async function build(opts?: { logger?: boolean }): Promise<FastifyInstanc
   await app.register(multipart);
   // Rate limiting. Global default is permissive (300 req/min) — the actual
   // protection is the per-route config on /api/auth/login and
-  // /api/onboarding/create, which are stricter. Keyed on the client IP.
+  // /api/onboarding/create, which are stricter. Keyed on `req.ip`, which
+  // honors TRUST_PROXY.
   await app.register(rateLimit, {
     global: false,
     max: 300,

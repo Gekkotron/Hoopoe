@@ -34,17 +34,29 @@ pre-release builds are not maintained.
 Hoopoe is designed as a **single-tenant, LAN-only** deployment
 (a home mini-PC, an intranet server, or similar). By default:
 
-- The frontend and backend containers bind to **every host interface**
-  (`0.0.0.0`) so other devices on your LAN can reach the app at
-  `http://<host-ip>:<port>`. If that's not what you want, restrict with a
-  host firewall — or edit `docker-compose.yml` and prefix the port
-  mappings with `127.0.0.1:` (e.g. `127.0.0.1:8000:80`) and put a
-  reverse proxy in front for remote access.
-- Onboarding registration is **open by design**: any client that can
-  reach the app can create the first user. On a LAN-exposed deployment,
-  that means anyone on your network can register an account. Firewall
-  the ports, disable onboarding after your first user, or put an
-  authenticating reverse proxy in front if you need stricter access.
+- The frontend container binds to **every host interface** (`0.0.0.0`)
+  so other devices on your LAN can reach the app at
+  `http://<host-ip>:<port>`; its nginx proxies `/api/*` to the backend.
+  The backend port (`8001`) and Postgres are published on `127.0.0.1`
+  only. If you don't want LAN access, restrict with a host firewall — or
+  edit `docker-compose.yml` and prefix the frontend port mapping with
+  `127.0.0.1:` (e.g. `127.0.0.1:8000:8080`) and put a reverse proxy in
+  front for remote access.
+- Registration is **open by default**: any client that can reach the
+  app can create an account, so on a LAN-exposed deployment anyone on
+  your network can register. Set `ALLOW_REGISTRATION=false` in `.env`
+  once everyone has an account: the first account can always be
+  created, but afterwards `POST /api/onboarding/create` returns 403
+  `registration_closed` and the login page hides the "create an account"
+  link. A firewall or an authenticating reverse proxy is still the right
+  tool for stricter access.
+- Per-client rate limits (login, 2FA, registration) key on the client IP.
+  The compose stack sets `TRUST_PROXY=loopback,uniquelocal` so the backend
+  trusts the nginx container's `X-Forwarded-For`, which nginx overwrites
+  with the real peer address. Only trust addresses that really are your
+  proxy; if you add another HTTPS reverse proxy in front of nginx, every
+  client appears as that proxy's IP unless you configure nginx `real_ip`
+  yourself.
 - Sessions are cookie-based with `httpOnly`; set `COOKIE_SECURE=true`
   behind an HTTPS-terminating reverse proxy so the cookie isn't
   transmitted over plain HTTP.

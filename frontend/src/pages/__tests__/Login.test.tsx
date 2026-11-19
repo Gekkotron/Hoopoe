@@ -41,8 +41,22 @@ describe('Login', () => {
     renderLogin();
     expect(await screen.findByRole('heading', { name: /bon retour/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /se connecter/i })).toBeInTheDocument();
-    // The register-mode toggle is offered.
-    expect(screen.getByRole('button', { name: /créer un compte/i })).toBeInTheDocument();
+    // The register-mode toggle is offered once the status has loaded.
+    expect(await screen.findByRole('button', { name: /créer un compte/i })).toBeInTheDocument();
+  });
+
+  it('hides the register toggle when the server reports registration closed', async () => {
+    apiMock.mockImplementation(async (path: string) => {
+      if (path === '/api/onboarding/status') return { needsOnboarding: false, registrationOpen: false };
+      throw new Error(`unexpected: ${path}`);
+    });
+    renderLogin();
+    expect(await screen.findByRole('heading', { name: /bon retour/i })).toBeInTheDocument();
+    await waitFor(() => expect(apiMock).toHaveBeenCalledWith('/api/onboarding/status'));
+    // Let the resolved query re-render before asserting the absence.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(screen.getByRole('button', { name: /se connecter/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /créer un compte/i })).not.toBeInTheDocument();
   });
 
   it('POSTs /api/auth/login on submit', async () => {

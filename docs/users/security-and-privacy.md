@@ -12,8 +12,9 @@ call to a model you connect yourself).
 
 ## Security model
 
-**LAN-only by default.** The Docker Compose stack binds the frontend and
-backend to your host, and the recommended posture is to keep Hoopoe reachable
+**LAN-only by default.** The Docker Compose stack exposes the frontend
+(nginx) on your host's network interfaces and publishes the backend and
+Postgres on `127.0.0.1` only, and the recommended posture is to keep Hoopoe reachable
 from your home network only — behind your router, not exposed to the public
 internet. The Tauri desktop build goes one step further: it binds to
 `127.0.0.1` on a random port and is unreachable from any other machine.
@@ -31,12 +32,16 @@ attempts against weak passwords.
 password nor a reversible representation is ever stored.
 
 **Open registration on the LAN.** Onboarding creates the first user
-account, and the endpoint stays open afterwards: anyone who can reach the
-app on your network can create their own account from the login screen
-("Créer un compte"). Every account's data is fully isolated — another user
+account, and by default the endpoint stays open afterwards: anyone who can
+reach the app on your network can create their own account from the login
+screen ("Créer un compte"). Every account's data is fully isolated — another user
 can never see your transactions — and usernames are unique, so nobody can
-register over the top of yours. Registration is rate-limited; if you want
-to stop new sign-ups entirely, restrict access with a firewall or VPN (see
+register over the top of yours. Registration is rate-limited; to stop new
+sign-ups once everyone has an account, set `ALLOW_REGISTRATION=false` in
+`.env` and restart the stack. The first account can always be created;
+afterwards the endpoint returns 403 `registration_closed` and the login
+page hides the "create an account" link. For stricter access, add a
+firewall or VPN (see
 [SECURITY.md](https://github.com/Gekkotron/Hoopoe/blob/main/SECURITY.md)).
 
 **Desktop path.** The Tauri build runs with `AUTH_MODE=none`: no cookies,

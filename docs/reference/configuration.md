@@ -31,6 +31,8 @@ fill in the fields marked **required**.
 | `DATABASE_URL` | *(none)* | Postgres URL | **Required when `DB_DRIVER=postgres`.** Full connection string, e.g. `postgres://athena:…@db:5432/athena`. |
 | `COOKIE_SECURE` | `false` | `true` / `false` / `1` / `0` | Marks the session cookie as `Secure`. Leave `false` on a plain-HTTP LAN deployment — otherwise the browser rejects the cookie and login silently fails. Set to `true` when running behind an HTTPS-terminating reverse proxy. |
 | `NODE_ENV` | `development` | `development` / `production` / `test` | Controls Fastify logging (`pino-pretty` in development, JSON otherwise) and enables the built-in static file server when `SERVE_STATIC` is unset. Docker Compose sets this to `production`. |
+| `TRUST_PROXY` | *(unset — `false`)* | `true` / hop count / comma-separated IPs, CIDRs or presets (`loopback`, `linklocal`, `uniquelocal`) | Passed to Fastify's `trustProxy`. Unset or `false` ignores `X-Forwarded-For` (desktop, bare `npm run dev`). Docker Compose sets `loopback,uniquelocal` so the nginx container is trusted and per-client rate limits (login, 2FA, registration) key on the real browser IP; nginx overwrites `X-Forwarded-For` with `$remote_addr`, so clients cannot inject entries. Only trust addresses that really are your proxy. If you put another HTTPS reverse proxy in front of nginx, every client shares that proxy's IP unless you configure nginx `real_ip` yourself. |
+| `ALLOW_REGISTRATION` | `true` | `true` / `false` | The first account (onboarding) can always be created. Once a user exists, `false` makes `POST /api/onboarding/create` return 403 `{ "error": "registration_closed" }` and hides the "create an account" link on the login page. Compose reads it from `.env`. Set it to `false` once everyone in the household has an account. |
 | `PORT` | `3000` | integer | Port Fastify listens on inside the container. Docker Compose maps `BACKEND_PORT` on the host to this port. |
 | `DB_DRIVER` | `postgres` | `postgres` / `pglite` | Selects the SQL backend. `postgres` uses `pg.Pool` (Docker path). `pglite` uses embedded Postgres-in-WASM (Tauri desktop, test path). |
 | `PGLITE_PATH` | *(unset — in-memory)* | filesystem path | Only used when `DB_DRIVER=pglite`. When set, PGlite persists to this directory; unset means an ephemeral in-memory database. |
@@ -56,8 +58,8 @@ time by Vite and inlined into the resulting `dist/`, not read at runtime.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `FRONTEND_PORT` | `8000` | Host port mapped to the frontend container's port 80. Bound to `0.0.0.0` so other devices on your LAN can reach the app. |
-| `BACKEND_PORT` | `8001` | Host port mapped to the backend container's port 3000. Bound to `0.0.0.0` for direct API testing; the frontend proxies `/api/*` calls through nginx in production. |
+| `FRONTEND_PORT` | `8000` | Host port mapped to the frontend container's port 8080. Bound to `0.0.0.0` so other devices on your LAN can reach the app. |
+| `BACKEND_PORT` | `8001` | Host port mapped to the backend container's port 3000. Published on `127.0.0.1` only, so `curl http://127.0.0.1:8001/health` works from the host but other LAN devices cannot reach it; they use the frontend, whose nginx proxies every `/api/*` call (including `/api/mcp/rpc`) to the backend. |
 
 Avoid `6000`, `6666`, `6665–6669`, and `6697` — Chrome blocks them as
 `ERR_UNSAFE_PORT`.
@@ -66,8 +68,8 @@ Avoid `6000`, `6666`, `6665–6669`, and `6697` — Chrome blocks them as
 
 | Service | Host port | Container port | Bind |
 | --- | --- | --- | --- |
-| Frontend (nginx) | `${FRONTEND_PORT:-8000}` | `80` | `0.0.0.0` (LAN-reachable) |
-| Backend (Fastify) | `${BACKEND_PORT:-8001}` | `3000` | `0.0.0.0` (LAN-reachable) |
+| Frontend (nginx) | `${FRONTEND_PORT:-8000}` | `8080` | `0.0.0.0` (LAN-reachable) |
+| Backend (Fastify) | `${BACKEND_PORT:-8001}` | `3000` | `127.0.0.1` only (never on the LAN) |
 | PostgreSQL | `5432` | `5432` | `127.0.0.1` only (never on the LAN) |
 
 Comment out the `db` service's `ports:` block in `docker-compose.yml` if you

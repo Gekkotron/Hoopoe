@@ -28,6 +28,12 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
       NODE_ENV: production
       PORT: 3000
+      # nginx (frontend container) is the only hop in front of the backend,
+      # on the private compose network. Trusting it lets rate limits key on
+      # the real browser address it sends in X-Forwarded-For.
+      TRUST_PROXY: ${TRUST_PROXY:-loopback,uniquelocal}
+      # Set to false in .env once everyone has an account.
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
       # Wall-clock features (bank-sync retrieval hour) follow this timezone;
       # containers default to UTC otherwise. Node honors TZ without tzdata.
       TZ: ${TZ:-UTC}
@@ -35,10 +41,10 @@ services:
       db:
         condition: service_healthy
     ports:
-      # Listens on all host interfaces so other machines on your LAN can hit
-      # the API directly (curl tests). The application is meant to be accessed
-      # through the frontend instead.
-      - "${BACKEND_PORT:-8001}:3000"
+      # Loopback only: LAN clients go through nginx on FRONTEND_PORT, which
+      # proxies /api/* (MCP included). Publishing this on every interface
+      # would let a LAN client skip nginx and forge X-Forwarded-For.
+      - "127.0.0.1:${BACKEND_PORT:-8001}:3000"
 
   frontend:
     # Build from the repo root, not ./frontend, because

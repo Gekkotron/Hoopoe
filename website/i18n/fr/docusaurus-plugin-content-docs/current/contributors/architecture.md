@@ -32,7 +32,7 @@ héberge un serveur Model Context Protocol pour l'accès local aux LLM.
                     │  Conteneur backend                  │
                     │  Node 20 + Fastify 5 + TypeScript   │
                     │  Drizzle ORM · argon2id · pg driver │
-                    │  Port hôte 8001 → conteneur 3000    │
+                    │  Loopback :8001 → conteneur 3000    │
                     └────────────────┬────────────────────┘
                                      │  SQL
                                      ▼
@@ -54,15 +54,16 @@ héberge un serveur Model Context Protocol pour l'accès local aux LLM.
 
 | Conteneur | Runtime | Port hôte | Port conteneur | Responsabilité |
 |-----------|---------|-----------|----------------|----------------|
-| `frontend` | nginx | `8000` | `80` | Sert l'application React compilée ; proxie `/api/*` vers le backend. |
-| `backend` | Node 20 | `8001` | `3000` | Logique métier, auth, importeurs, catégorisation, agrégats. |
+| `frontend` | nginx | `8000` | `8080` | Sert l'application React compilée ; proxie `/api/*` vers le backend. |
+| `backend` | Node 20 | `8001` (loopback) | `3000` | Logique métier, auth, importeurs, catégorisation, agrégats. |
 | `postgres` | PostgreSQL 16 | `5432` (loopback) | `5432` | Persistance. Utilise `pg_trgm`, `unaccent`, `pgcrypto`. |
 | `mcp` (optionnel) | Node 20 | non exposé | — | Surface d'outils LLM. Chiffre les payloads avec un jeton par utilisateur. |
 
-Le frontend et le backend écoutent sur toutes les interfaces hôtes pour
-que d'autres appareils du LAN puissent joindre l'application. Postgres
-n'écoute que sur `127.0.0.1` — le backend l'atteint via le réseau
-Compose, et rien en dehors de l'hôte ne doit y toucher.
+Le frontend écoute sur toutes les interfaces hôtes pour que d'autres
+appareils du LAN puissent joindre l'application. Le backend
+(`127.0.0.1:8001`) et Postgres n'écoutent que sur loopback — nginx
+atteint le backend via le réseau Compose, et rien en dehors de l'hôte ne
+doit y toucher directement.
 
 ## Flux d'une requête : « l'utilisateur importe un fichier OFX »
 

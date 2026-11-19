@@ -642,6 +642,9 @@ la valeur d'un cookie avant de coller.
 
 ### Endpoint `/health`
 
+Exécutez ces commandes depuis la machine hôte elle-même : le port du
+backend n'est publié que sur `127.0.0.1`.
+
 ```sh
 curl -s http://localhost:8001/health
 ```

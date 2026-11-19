@@ -32,7 +32,7 @@ runs a Model Context Protocol server for local LLM access.
                     │  Backend container                  │
                     │  Node 20 + Fastify 5 + TypeScript   │
                     │  Drizzle ORM · argon2id · pg driver │
-                    │  Host port 8001 → container 3000    │
+                    │  Loopback :8001 → container 3000    │
                     └────────────────┬────────────────────┘
                                      │  SQL
                                      ▼
@@ -53,15 +53,15 @@ runs a Model Context Protocol server for local LLM access.
 
 | Container | Runtime | Host port | Container port | Responsibility |
 |-----------|---------|-----------|----------------|----------------|
-| `frontend` | nginx | `8000` | `80` | Serves the built React app; proxies `/api/*` to the backend. |
-| `backend` | Node 20 | `8001` | `3000` | Business logic, auth, importers, categorization, aggregates. |
+| `frontend` | nginx | `8000` | `8080` | Serves the built React app; proxies `/api/*` to the backend. |
+| `backend` | Node 20 | `8001` (loopback) | `3000` | Business logic, auth, importers, categorization, aggregates. |
 | `postgres` | PostgreSQL 16 | `5432` (loopback) | `5432` | Persistence. Uses `pg_trgm`, `unaccent`, `pgcrypto`. |
 | `mcp` (optional) | Node 20 | not exposed | — | LLM tool surface. Encrypts payloads with a per-user token. |
 
-Frontend and backend listen on every host interface so other devices
-on your LAN can reach the app. Postgres binds to `127.0.0.1` only —
-the backend reaches it via the compose network, and nothing outside
-the host should touch it.
+The frontend listens on every host interface so other devices on your
+LAN can reach the app. The backend (`127.0.0.1:8001`) and Postgres
+bind to loopback only — nginx reaches the backend via the compose
+network, and nothing outside the host should touch them directly.
 
 ## Request flow: "user imports an OFX file"
 
