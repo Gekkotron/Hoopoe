@@ -72,9 +72,14 @@ export async function runRecurringDetection(
     .where(eq(recurringSeries.userId, userId));
 
   const preservedByKey = new Map<string, (typeof existing)[number]>();
+  // A 'detected' row is deleted and rebuilt below, but the user can still have
+  // tagged it essential / discretionary. Carry that tag over to the rebuilt row.
+  const essentialnessByKey = new Map<string, NonNullable<(typeof existing)[number]['essentialness']>>();
   for (const s of existing) {
     if (s.status !== 'detected') {
       preservedByKey.set(`${s.label}|${s.cadenceDays}`, s);
+    } else if (s.essentialness) {
+      essentialnessByKey.set(`${s.label}|${s.cadenceDays}`, s.essentialness);
     }
   }
 
@@ -125,6 +130,7 @@ export async function runRecurringDetection(
       firstSeenAt: s.firstSeenAt,
       lastSeenAt: s.lastSeenAt,
       nextDueAt: s.nextDueAt,
+      essentialness: essentialnessByKey.get(`${s.label}|${s.cadenceDays}`) ?? null,
     })))
     .onConflictDoUpdate({
       target: [recurringSeries.userId, recurringSeries.label, recurringSeries.cadenceDays],
