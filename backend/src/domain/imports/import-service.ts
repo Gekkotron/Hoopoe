@@ -1,6 +1,7 @@
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../../db/client.js';
-import { accountFilenamePatterns } from '../../db/schema.js';
+import { accountFilenamePatterns, accounts } from '../../db/schema.js';
+import { assertOwnedAccount } from '../ownership.js';
 import { parseQif } from './qif-parser.js';
 import { parseBai2 } from './bai2-parser.js';
 import { parseMt940 } from './mt940-parser.js';
@@ -18,9 +19,12 @@ export type { ImportFormat, ImportResult } from './import-service-types.js';
 // Pick the destination account from the filename via the configured patterns.
 // Returns the highest-priority match; null when no pattern matches.
 export async function resolveAccountFromFilename(userId: number, filename: string): Promise<number | null> {
+  // Join accounts so a pattern can only resolve to an account the caller
+  // owns, even if a legacy row points at someone else's account.
   const patterns = await db
-    .select()
+    .select({ pattern: accountFilenamePatterns.pattern, accountId: accountFilenamePatterns.accountId })
     .from(accountFilenamePatterns)
+    .innerJoin(accounts, and(eq(accounts.id, accountFilenamePatterns.accountId), eq(accounts.userId, userId)))
     .where(eq(accountFilenamePatterns.userId, userId))
     .orderBy(desc(accountFilenamePatterns.priority));
   const lower = filename.toLowerCase();
@@ -71,6 +75,7 @@ export async function runImport(opts: {
   prepared?: ParsedTransaction[];
   skipParsedIndices?: number[];
 }): Promise<ImportResult> {
+  await assertOwnedAccount(opts.userId, opts.accountId);
   const tStart = Date.now();
   const parsed = opts.prepared ?? await parseFileAsync(opts.buffer!, opts.format);
   const tParsed = Date.now();

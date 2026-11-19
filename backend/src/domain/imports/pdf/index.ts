@@ -10,6 +10,7 @@ import { parseStatementRows } from './parse-rows.js';
 import type { RenderedPage } from './render.js';
 import { parkDraft, type ParkedDraft } from './park-draft.js';
 import { diagnoseStaleTemplate } from './diagnose.js';
+import { assertOwnedAccount } from '../../ownership.js';
 
 // Public API re-exports so external callers (routes/imports.ts,
 // domain/imports/photo/index.ts) can keep importing from `pdf/index.js`.
@@ -40,6 +41,7 @@ export async function importPdf(opts: {
   // parking a draft for the wizard, return { kind: 'skipped' }.
   headless?: boolean;
 }): Promise<ImportPdfResult> {
+  await assertOwnedAccount(opts.userId, opts.accountId);
   const pages = await extractText(opts.buffer);
   const noText = pages.every((p) => p.items.length === 0);
   const fingerprint = noText ? '' : fingerprintHeader(pages[0]!);
@@ -57,6 +59,7 @@ export async function importPdf(opts: {
         and(
           eq(pdfStatementTemplates.fingerprint, fingerprint),
           eq(pdfStatementTemplates.accountId, opts.accountId),
+          eq(pdfStatementTemplates.userId, opts.userId),
         ),
       );
     if (tpl) {

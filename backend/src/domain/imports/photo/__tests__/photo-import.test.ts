@@ -18,6 +18,8 @@ vi.mock('../../../../db/client.js', () => ({
   },
 }));
 vi.mock('../../pdf/index.js', () => ({ runOcrJob: h.runOcrJob }));
+// Account ownership is covered by the DB-backed cross-tenant tests.
+vi.mock('../../../ownership.js', () => ({ assertOwnedAccount: async () => undefined }));
 
 import {
   detectImageMime,

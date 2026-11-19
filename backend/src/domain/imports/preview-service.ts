@@ -11,6 +11,7 @@ import { parseXlsx } from './xlsx-parser.js';
 import { normalizeLabel } from './normalize.js';
 import { computeDedupKey } from './dedup.js';
 import { findFuzzyMatches, type FuzzyCandidate } from '../dedup/fuzzy-match.js';
+import { assertOwnedAccount } from '../ownership.js';
 
 export type PreviewFormat = 'ofx' | 'csv' | 'camt' | 'qif' | 'mt940' | 'xlsx' | 'bai2';
 
@@ -64,6 +65,9 @@ export async function previewImport(opts: {
   format: PreviewFormat;
   buffer: Buffer;
 }): Promise<PreviewResult> {
+  // Without this, the dedup lookup below (keyed by account_id alone) tells
+  // the caller which rows another user's account already holds.
+  await assertOwnedAccount(opts.userId, opts.accountId);
   const parsed = await parseAsync(opts.buffer, opts.format);
   if (parsed.length === 0) {
     return {
@@ -98,6 +102,7 @@ export async function previewImport(opts: {
     .from(transactions)
     .where(and(
       eq(transactions.accountId, opts.accountId),
+      eq(transactions.userId, opts.userId),
       inArray(transactions.dedupKey, withKeys.map((w) => w.dedupKey)),
     ));
   const seen = new Set(existing.map((r) => r.dedupKey));

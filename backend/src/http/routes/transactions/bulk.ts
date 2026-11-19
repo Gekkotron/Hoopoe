@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../../../db/client.js';
 import { transactions, transactionSplits } from '../../../db/schema.js';
+import { areCategoriesOwned } from '../../../domain/ownership.js';
 import { userId } from '../../plugins/auth.js';
 import { CategorizeBulkBody } from './schemas.js';
 import { isPgError } from './helpers.js';
@@ -69,6 +70,9 @@ export function registerBulk(app: FastifyInstance): void {
       return reply.code(400).send({ error: 'invalid input', issues: parsed.error.issues });
     }
     const { ids, categoryId } = parsed.data;
+    if (categoryId != null && !(await areCategoriesOwned(uid, [categoryId]))) {
+      return reply.code(400).send({ error: 'catégorie inconnue' });
+    }
 
     try {
       const result = await db.transaction(async (tx) => {

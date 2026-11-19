@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../../../db/client.js';
 import { transactions } from '../../../db/schema.js';
 import { normalizeLabel } from '../../../domain/imports/normalize.js';
+import { areCategoriesOwned, isAccountOwned } from '../../../domain/ownership.js';
 import { userId } from '../../plugins/auth.js';
 import { PatchBody } from './schemas.js';
 import { isPgError, parseId } from './helpers.js';
@@ -61,6 +62,15 @@ export function registerPatch(app: FastifyInstance): void {
     }
     if (Object.keys(updates).length === 0) {
       return reply.code(400).send({ error: 'no fields to update' });
+    }
+    // The UPDATE below scopes the row to the caller but not its new
+    // account / category, and the FK alone accepts another user's ids.
+    // Same message as the FK branch so foreign and missing ids look alike.
+    if (updates.accountId !== undefined && !(await isAccountOwned(uid, updates.accountId))) {
+      return reply.code(400).send({ error: 'compte ou catégorie inconnu' });
+    }
+    if (updates.categoryId != null && !(await areCategoriesOwned(uid, [updates.categoryId]))) {
+      return reply.code(400).send({ error: 'compte ou catégorie inconnu' });
     }
 
     try {
