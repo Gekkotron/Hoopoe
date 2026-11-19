@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { gunzipSync, gzipSync } from 'node:zlib';
 import { z } from 'zod';
 import { db } from '../../db/client.js';
+import { upgradeLegacyDedupKey } from '../imports/dedup.js';
 import {
   accounts,
   transactionAttachments,
@@ -149,7 +150,8 @@ export async function restoreAttachmentsArchive(
   let restored = 0;
   let skipped = 0;
   for (const entry of archive.attachments) {
-    const txId = txIdByKey.get(`${entry.account}::${entry.dedupKey}`);
+    // Archives taken before migration 0050 carry `hash:` keys.
+    const txId = txIdByKey.get(`${entry.account}::${upgradeLegacyDedupKey(entry.dedupKey)}`);
     if (txId == null) {
       skipped++;
       continue;

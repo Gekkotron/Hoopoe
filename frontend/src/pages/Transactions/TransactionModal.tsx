@@ -69,8 +69,10 @@ export function TransactionModal({
     })
   );
 
-  const { error, setError, createdTxIdOnFailure, resetErrorState, create, update, pending } =
-    useTransactionModalMutations({ transaction, splitsDraft, parentCents, onClose });
+  const {
+    error, setError, createdTxIdOnFailure, resetErrorState, create, update, pending,
+    duplicateInput, clearDuplicate, addAnyway,
+  } = useTransactionModalMutations({ transaction, splitsDraft, parentCents, onClose });
 
   useEffect(() => {
     if (!open) return;
@@ -100,6 +102,12 @@ export function TransactionModal({
     resetErrorState();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, transaction]);
+
+  // Any edit after a duplicate warning invalidates the pending "add anyway".
+  useEffect(() => {
+    if (duplicateInput) clearDuplicate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountId, date, amount, rawLabel, categoryId, notes, lockYearsInput, splitsDraft]);
 
   useEffect(() => {
     if (!open) return;
@@ -187,6 +195,18 @@ export function TransactionModal({
             {createdTxIdOnFailure != null
               ? t('modal.errors.createdButSplitsFailed', { message: error ?? '' })
               : error}
+            {duplicateInput && createdTxIdOnFailure == null && (
+              <div className="mt-2">
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={addAnyway}
+                  disabled={pending}
+                >
+                  {t('modal.actions.addAnyway')}
+                </button>
+              </div>
+            )}
           </div>
         )}
         </div>

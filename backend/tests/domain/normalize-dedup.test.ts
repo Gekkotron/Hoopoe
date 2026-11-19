@@ -59,11 +59,11 @@ describe('computeDedupKey', () => {
     expect(computeDedupKey({ ...base, fitid: '  20250615-000123  ' })).toBe('fitid:20250615-000123');
   });
 
-  it('falls back to a stable SHA-1 hash when FITID is missing or blank', () => {
+  it('falls back to a stable occurrence hash when FITID is missing or blank', () => {
     const k1 = computeDedupKey({ ...base });
     const k2 = computeDedupKey({ ...base, fitid: '   ' });
     const k3 = computeDedupKey({ ...base, fitid: null });
-    expect(k1).toMatch(/^hash:[0-9a-f]{40}$/);
+    expect(k1).toMatch(/^hash2:[0-9a-f]{64}$/);
     expect(k1).toBe(k2);
     expect(k1).toBe(k3);
   });

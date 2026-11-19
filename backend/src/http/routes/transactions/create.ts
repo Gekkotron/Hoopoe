@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../../../db/client.js';
 import { accounts, transactions } from '../../../db/schema.js';
 import { normalizeLabel } from '../../../domain/imports/normalize.js';
-import { computeDedupKey } from '../../../domain/imports/dedup.js';
+import { computeDedupKey, dedupKeyCandidates } from '../../../domain/imports/dedup.js';
 import { categorizeOne, loadRuleEngine } from '../../../domain/rules/recategorize.js';
 import { afterTransactionInserted, computeCurrentBalance } from '../../../domain/notifications/hooks.js';
 import { areCategoriesOwned } from '../../../domain/ownership.js';
@@ -13,7 +13,15 @@ import { isPgError } from './helpers.js';
 
 // Manual transaction creation. Same dedup discipline as the importer — the
 // UNIQUE(account_id, dedup_key) constraint rejects exact duplicates at the
-// DB level, which we translate to a clean 409.
+// DB level, which we translate to a 409 `duplicate_transaction`. The UI then
+// offers "add anyway", which resends with `force: true`; the row is stored
+// under the first free occurrence key (#2, #3, …), the same key a bank file
+// listing both rows would give it.
+const MAX_OCCURRENCES = 100;
+const DUPLICATE_ERROR = {
+  code: 'duplicate_transaction',
+  error: 'une transaction identique existe déjà pour ce compte (même date, montant et libellé)',
+} as const;
 export function registerCreate(app: FastifyInstance): void {
   app.post('/api/transactions', async (req, reply) => {
     const uid = userId(req);
@@ -34,13 +42,25 @@ export function registerCreate(app: FastifyInstance): void {
 
     const amount = Number(v.amount).toFixed(2);
     const normalized = normalizeLabel(v.rawLabel);
-    const dedupKey = computeDedupKey({
+    const dedupInput = {
       accountId: v.accountId,
       date: v.date,
       amount,
       normalizedLabel: normalized,
       fitid: null,
-    });
+    };
+    let dedupKey = computeDedupKey(dedupInput);
+    if (v.force) {
+      const candidates = dedupKeyCandidates(dedupInput, MAX_OCCURRENCES);
+      const taken = new Set((await db
+        .select({ k: transactions.dedupKey })
+        .from(transactions)
+        .where(and(eq(transactions.accountId, v.accountId), inArray(transactions.dedupKey, candidates))))
+        .map((r) => r.k));
+      const free = candidates.find((k) => !taken.has(k));
+      if (!free) return reply.code(409).send(DUPLICATE_ERROR);
+      dedupKey = free;
+    }
 
     try {
       const [inserted] = await db
@@ -91,9 +111,7 @@ export function registerCreate(app: FastifyInstance): void {
       return reply.code(201).send({ transaction: row });
     } catch (err) {
       if (isPgError(err) && err.code === '23505') {
-        return reply.code(409).send({
-          error: 'une transaction identique existe déjà pour ce compte (même date, montant et libellé)',
-        });
+        return reply.code(409).send(DUPLICATE_ERROR);
       }
       if (isPgError(err) && err.code === '23503') {
         return reply.code(400).send({ error: 'compte ou catégorie inconnu' });

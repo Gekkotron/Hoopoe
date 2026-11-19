@@ -9,7 +9,7 @@ import { fingerprintHeader } from '../../domain/imports/pdf/fingerprint.js';
 import { parseStatementRows } from '../../domain/imports/pdf/parse-rows.js';
 import type { TemplateZones } from '../../domain/imports/pdf/zones.js';
 import { normalizeLabel } from '../../domain/imports/normalize.js';
-import { computeDedupKey } from '../../domain/imports/dedup.js';
+import { computeDedupKeys } from '../../domain/imports/dedup.js';
 import { reconcile, renderReconcileSummary, type StatementLine, type ExistingTx } from '../../domain/reconcile/reconcile.js';
 
 const PDF_MAX_BYTES = 10 * 1024 * 1024;
@@ -67,13 +67,16 @@ export async function reconcileRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(422).send({ code: 'needs_template', reason: 'template_stale', error: 'saved template no longer matches this PDF; re-train it via Hoopoe import' });
     }
 
-    const statement: StatementLine[] = rowsRes.rows.map((r) => {
-      const normalizedLabel = normalizeLabel(r.rawLabel);
-      return {
-        date: r.date, amount: r.amount, rawLabel: r.rawLabel, normalizedLabel,
-        dedupKey: computeDedupKey({ accountId, date: r.date, amount: r.amount, normalizedLabel, fitid: r.fitid }),
-      };
-    });
+    // Numbered like an import of the same statement, so the n-th
+    // identical line matches the n-th stored row exactly.
+    const labels = rowsRes.rows.map((r) => normalizeLabel(r.rawLabel));
+    const keys = computeDedupKeys(rowsRes.rows.map((r, i) => ({
+      accountId, date: r.date, amount: r.amount, normalizedLabel: labels[i]!, fitid: r.fitid,
+    })));
+    const statement: StatementLine[] = rowsRes.rows.map((r, i) => ({
+      date: r.date, amount: r.amount, rawLabel: r.rawLabel, normalizedLabel: labels[i]!,
+      dedupKey: keys[i]!,
+    }));
 
     const dates = statement.map((s) => s.date).sort();
     const from = fromDate ?? dates[0] ?? '0000-01-01';

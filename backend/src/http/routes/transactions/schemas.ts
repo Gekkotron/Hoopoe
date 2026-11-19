@@ -70,6 +70,9 @@ export const CreateBody = z.object({
   categoryId: z.number().int().positive().nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
   lockYears: z.number().int().min(0).max(99).nullable().optional(),
+  // User confirmed an identical row (same date / amount / label) is a
+  // distinct transaction: store it under the next free occurrence key.
+  force: z.boolean().optional(),
 });
 
 export const IdParam = z.object({ id: z.coerce.number().int().positive() });

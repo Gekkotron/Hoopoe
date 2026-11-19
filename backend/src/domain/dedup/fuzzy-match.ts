@@ -71,6 +71,10 @@ export async function findFuzzyMatches(opts: {
   accountId: number;
   userId: number;
   incoming: FuzzyCandidate[];
+  // Stored rows already claimed by an exact dedup-key match in the same
+  // file. Without this, the second of two identical coffees fuzzy-matches
+  // the stored first coffee and the preview pre-ticks it for skipping.
+  excludeTxIds?: ReadonlySet<number>;
 }): Promise<Map<number, ScoredMatch[]>> {
   const result = new Map<number, ScoredMatch[]>();
   if (opts.incoming.length === 0) return result;
@@ -111,6 +115,7 @@ export async function findFuzzyMatches(opts: {
     ));
 
   for (const existing of candidates) {
+    if (opts.excludeTxIds?.has(existing.id)) continue;
     const eCand: FuzzyCandidate = {
       txId: existing.id,
       date: existing.date,

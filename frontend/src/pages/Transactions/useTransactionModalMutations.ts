@@ -5,6 +5,23 @@ import type { Transaction } from '../../api/types';
 import { parseMagnitudeCents, type DraftSplit } from './SplitEditor';
 import type { TxPatch } from './transaction-modal-lib';
 
+export interface CreateInput {
+  accountId: number;
+  date: string;
+  amount: string;
+  rawLabel: string;
+  categoryId: number | null;
+  notes: string | null;
+  lockYears: number | null;
+}
+
+export function isDuplicateTransactionError(err: unknown): boolean {
+  if (!(err instanceof ApiError) || err.status !== 409) return false;
+  const data = err.data;
+  return !!data && typeof data === 'object'
+    && (data as { code?: unknown }).code === 'duplicate_transaction';
+}
+
 export function useTransactionModalMutations({
   transaction,
   splitsDraft,
@@ -58,16 +75,13 @@ export function useTransactionModalMutations({
     });
   }
 
+  // Set when the backend refuses a create as an exact duplicate (409
+  // duplicate_transaction). Holds the refused input so "add anyway" can
+  // re-submit precisely it with force: true.
+  const [duplicateInput, setDuplicateInput] = useState<CreateInput | null>(null);
+
   const create = useMutation({
-    mutationFn: async (input: {
-      accountId: number;
-      date: string;
-      amount: string;
-      rawLabel: string;
-      categoryId: number | null;
-      notes: string | null;
-      lockYears: number | null;
-    }) => {
+    mutationFn: async (input: CreateInput & { force?: boolean }) => {
       const { transaction: tx } = await api<{ transaction: Transaction }>('/api/transactions', {
         method: 'POST', json: input,
       });
@@ -85,9 +99,13 @@ export function useTransactionModalMutations({
       return { transaction: tx };
     },
     onSuccess: () => { invalidate(); onClose(); },
-    onError: (err: unknown) => {
+    onError: (err: unknown, variables) => {
       const message = err instanceof ApiError || err instanceof Error ? err.message : String(err);
       setError(message);
+      if (isDuplicateTransactionError(err)) {
+        const { force: _force, ...refused } = variables;
+        setDuplicateInput(refused);
+      }
     },
   });
 
@@ -108,7 +126,20 @@ export function useTransactionModalMutations({
   });
 
   const pending = create.isPending || update.isPending;
-  const resetErrorState = () => { setError(null); setCreatedTxIdOnFailure(null); };
+  const resetErrorState = () => {
+    setError(null);
+    setCreatedTxIdOnFailure(null);
+    setDuplicateInput(null);
+  };
+  // Called when the form changes after a duplicate warning: the pending
+  // "add anyway" no longer matches what is on screen.
+  const clearDuplicate = () => { setDuplicateInput(null); setError(null); };
+  const addAnyway = () => {
+    if (duplicateInput) create.mutate({ ...duplicateInput, force: true });
+  };
 
-  return { error, setError, createdTxIdOnFailure, resetErrorState, create, update, pending };
+  return {
+    error, setError, createdTxIdOnFailure, resetErrorState, create, update, pending,
+    duplicateInput, clearDuplicate, addAnyway,
+  };
 }
