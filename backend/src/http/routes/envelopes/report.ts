@@ -7,13 +7,13 @@ import {
   envelopeAssignments,
   envelopeCategorySettings,
   envelopeMonthHolds,
-  transactions,
 } from '../../../db/schema.js';
+import { TX_EFFECTIVE_CTE } from '../reports/sql-fragments.js';
 import { computeCategoryBalances, computePool } from '../../../lib/envelope-math.js';
 import { userId } from '../../plugins/auth.js';
 
 export function registerReportRoute(app: FastifyInstance): void {
-  const ReportQuery = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) });
+  const ReportQuery = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/) });
 
   app.get('/api/envelopes/report', async (req, reply) => {
     const uid = userId(req);
@@ -38,35 +38,41 @@ export function registerReportRoute(app: FastifyInstance): void {
     //    against payments in the same category rather than double-counting
     //    as additional spend — needed for one-category tracking of things
     //    like Impôts where a refund arrives once in a while.
-    const spendRows = await db
-      .select({
-        categoryId: transactions.categoryId,
-        month: sql<string>`to_char(date_trunc('month', ${transactions.date}), 'YYYY-MM-01')`,
-        amount: sql<string>`(-sum(${transactions.amount}))::text`,
-      })
-      .from(transactions)
-      .innerJoin(categories, eq(transactions.categoryId, categories.id))
-      .where(and(
-        eq(categories.userId, uid),
-        eq(categories.kind, 'expense'),
-        eq(transactions.userId, uid),
-        lte(transactions.date, sql`(${monthDate}::date + interval '1 month - 1 day')`),
-      ))
-      .groupBy(transactions.categoryId, sql`date_trunc('month', ${transactions.date})`);
+    //    Runs over tx_effective (same CTE as the categories / budget reports)
+    //    so a split transaction contributes each split to its own category
+    //    instead of its full amount to the parent's category.
+    const spendRes = await db.execute<{ category_id: number | null; month: string; amount: string }>(sql`
+      WITH ${TX_EFFECTIVE_CTE}
+      SELECT
+        e.category_id,
+        to_char(date_trunc('month', e.date), 'YYYY-MM-01') AS month,
+        (-SUM(e.amount))::text AS amount
+      FROM tx_effective e
+      JOIN categories c ON c.id = e.category_id
+      WHERE c.user_id = ${uid}
+        AND c.kind = 'expense'
+        AND e.user_id = ${uid}
+        AND e.date <= (${monthDate}::date + interval '1 month - 1 day')
+      GROUP BY e.category_id, date_trunc('month', e.date)
+    `);
+    const spendRows = spendRes.rows.map((r) => ({
+      categoryId: r.category_id,
+      month: r.month,
+      amount: r.amount,
+    }));
 
-    // 3) Income cumulative up to this month
-    const [incomeAgg] = await db
-      .select({
-        total: sql<string>`coalesce(sum(${transactions.amount}), 0)::text`,
-      })
-      .from(transactions)
-      .innerJoin(categories, eq(transactions.categoryId, categories.id))
-      .where(and(
-        eq(categories.userId, uid),
-        eq(categories.kind, 'income'),
-        eq(transactions.userId, uid),
-        lte(transactions.date, sql`(${monthDate}::date + interval '1 month - 1 day')`),
-      ));
+    // 3) Income cumulative up to this month (split-aware, see above)
+    const incomeRes = await db.execute<{ total: string }>(sql`
+      WITH ${TX_EFFECTIVE_CTE}
+      SELECT COALESCE(SUM(e.amount), 0)::text AS total
+      FROM tx_effective e
+      JOIN categories c ON c.id = e.category_id
+      WHERE c.user_id = ${uid}
+        AND c.kind = 'income'
+        AND e.user_id = ${uid}
+        AND e.date <= (${monthDate}::date + interval '1 month - 1 day')
+    `);
+    const incomeAgg = incomeRes.rows[0];
 
     // 4) Holds: this month + prior month
     const holdRows = await db
