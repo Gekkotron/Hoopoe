@@ -11,9 +11,9 @@ const key = deriveContentKey(Buffer.from(TOKEN, 'base64url'));
 function fakeFetch(handler: (op: string, args: any) => { status: number; body: unknown }) {
   return async (_url: string, init: any) => {
     const { user, nonce, ct } = JSON.parse(init.body);
-    const inner = JSON.parse(decryptEnvelope(key, `athena-mcp-v1|${user}|req`, nonce, ct));
+    const inner = JSON.parse(decryptEnvelope(key, `hoopoe-mcp-v1|${user}|req`, nonce, ct));
     const out = handler(inner.op, inner.args);
-    const env = encryptEnvelope(key, `athena-mcp-v1|${user}|res`, JSON.stringify(out));
+    const env = encryptEnvelope(key, `hoopoe-mcp-v1|${user}|res`, JSON.stringify(out));
     return { ok: true, status: 200, json: async () => ({ v: 1, nonce: env.nonce, ct: env.ct }) };
   };
 }
@@ -29,7 +29,7 @@ describe('RpcClient', () => {
     const spy = async (_u: string, init: any) => {
       seenBody = init.body;
       const { user, nonce, ct } = JSON.parse(init.body);
-      const env = encryptEnvelope(key, `athena-mcp-v1|${user}|res`, JSON.stringify({ status: 200, body: {} }));
+      const env = encryptEnvelope(key, `hoopoe-mcp-v1|${user}|res`, JSON.stringify({ status: 200, body: {} }));
       return { ok: true, status: 200, json: async () => ({ v: 1, nonce: env.nonce, ct: env.ct }) };
     };
     const c = new RpcClient(cfg, spy as any);

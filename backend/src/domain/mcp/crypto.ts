@@ -11,6 +11,15 @@ const WRAP_INFO = 'key-wrap';
 const NONCE_BYTES = 12;
 const TAG_BYTES = 16;
 
+// AES-GCM additional data binding an envelope to its user and direction.
+// Wire format shared with the mcp/ client (mcp/src/crypto.ts) — both sides must build the exact
+// same string or every call fails authentication (backend/tests/mcp/
+// client-compat.test.ts drives the real client against the real route).
+// Not persisted, so unlike the HKDF salts it carries the Hoopoe name.
+export function envelopeAad(user: string, dir: 'req' | 'res'): string {
+  return `hoopoe-mcp-v1|${user}|${dir}`;
+}
+
 function hkdf32(ikm: Buffer, salt: string, info: string): Buffer {
   return Buffer.from(hkdfSync('sha256', ikm, Buffer.from(salt), Buffer.from(info), 32));
 }

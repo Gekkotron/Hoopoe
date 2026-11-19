@@ -1,9 +1,20 @@
 import { hkdfSync, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
 
+// Legacy salt, must match backend/src/domain/mcp/crypto.ts: it feeds the
+// persistent key derivation, so renaming it would invalidate every token.
 const HKDF_SALT = 'athena-mcp-v1';
 const HKDF_INFO = 'content-key';
 const NONCE_BYTES = 12;
 const TAG_BYTES = 16;
+
+// AES-GCM additional data binding an envelope to its user and direction.
+// Wire format shared with the backend route (backend/src/domain/mcp/crypto.ts) — both sides must build the exact
+// same string or every call fails authentication (backend/tests/mcp/
+// client-compat.test.ts drives the real client against the real route).
+// Not persisted, so unlike the HKDF salts it carries the Hoopoe name.
+export function envelopeAad(user: string, dir: 'req' | 'res'): string {
+  return `hoopoe-mcp-v1|${user}|${dir}`;
+}
 
 export function deriveContentKey(tokenBytes: Buffer): Buffer {
   return Buffer.from(hkdfSync('sha256', tokenBytes, Buffer.from(HKDF_SALT), Buffer.from(HKDF_INFO), 32));
