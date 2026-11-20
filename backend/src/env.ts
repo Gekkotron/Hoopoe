@@ -5,7 +5,22 @@ const boolish = z
   .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
   .transform((v) => v === true || v === 'true' || v === '1');
 
-const Env = z
+// SESSION_SECRET values that shipped in public files (.env.example). Any
+// install running one in production has a world-known root key for TOTP,
+// bank-sync, backup and MCP secrets, so boot is refused (see the refine
+// below). `replace-me` catches edited-but-not-replaced variants.
+export const SESSION_SECRET_PLACEHOLDERS: readonly string[] = [
+  'replace-me-with-at-least-32-random-characters-please',
+];
+
+export function isPlaceholderSessionSecret(secret: string): boolean {
+  return SESSION_SECRET_PLACEHOLDERS.includes(secret) || /replace[-_ ]?me/i.test(secret);
+}
+
+// Compose passes unset optional vars as '' — treat that as absent.
+const emptyAsUndefined = (v: unknown) => (v === '' ? undefined : v);
+
+export const Env = z
   .object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     PORT: z.coerce.number().int().positive().default(3000),
@@ -26,6 +41,11 @@ const Env = z
     DATABASE_URL: z.string().url().optional(),
     PGLITE_PATH: z.string().optional(),
     SESSION_SECRET: z.string().min(32, 'SESSION_SECRET must be at least 32 characters'),
+    // Set for ONE boot when changing SESSION_SECRET: the Docker entry
+    // re-encrypts every secret derived from it (TOTP, bank-sync, backup
+    // destinations, MCP keys) from this old value to the new one, in a
+    // single transaction, then logs that it can be removed.
+    SESSION_SECRET_PREVIOUS: z.preprocess(emptyAsUndefined, z.string().min(1).optional()),
     // Optional bearer token for /metrics. When set, the endpoint requires
     // `Authorization: Bearer <token>` and rejects everything else with 401.
     // When empty, the endpoint stays open — a startup warning is logged so
@@ -80,6 +100,14 @@ const Env = z
   .refine((v) => v.DB_DRIVER !== 'postgres' || !!v.DATABASE_URL, {
     message: 'DATABASE_URL is required when DB_DRIVER=postgres',
     path: ['DATABASE_URL'],
+  })
+  .refine((v) => v.NODE_ENV !== 'production' || !isPlaceholderSessionSecret(v.SESSION_SECRET), {
+    message:
+      'SESSION_SECRET is the public placeholder from .env.example. Generate a real one with ' +
+      '`openssl rand -hex 32` and put it in SESSION_SECRET. To keep existing 2FA, bank-sync, ' +
+      'backup and MCP secrets, also set SESSION_SECRET_PREVIOUS to the old placeholder for one ' +
+      'boot so they are re-encrypted under the new key.',
+    path: ['SESSION_SECRET'],
   });
 
 function parseEnv() {

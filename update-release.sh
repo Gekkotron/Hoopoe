@@ -26,6 +26,23 @@ NO_BACKUP=0
 
 git pull --rebase --autostash
 
+# --- Pre-flight: placeholder SESSION_SECRET ---------------------------------------
+# Newer backends refuse to boot on the public .env.example placeholder. Stop
+# here, before the backup / pull / restart, with the fix instead of a failed
+# health check.
+SECRET="$(sed -n 's/^SESSION_SECRET=//p' .env 2>/dev/null | tail -n 1)"
+if printf '%s' "$SECRET" | grep -Eqi 'replace[-_ ]?me'; then
+  cat >&2 <<'MSG'
+SESSION_SECRET in .env is still the public placeholder from .env.example.
+The new backend refuses to start with it. In .env:
+  1. move the current value to SESSION_SECRET_PREVIOUS=<old value>
+  2. set SESSION_SECRET=$(openssl rand -hex 32)
+Then rerun this script. The first boot re-encrypts 2FA, bank-sync, backup
+and MCP secrets under the new key; remove SESSION_SECRET_PREVIOUS afterwards.
+MSG
+  exit 1
+fi
+
 # --- Resolve target version ---------------------------------------------------
 # /releases/latest only knows about stable releases (404 while everything is
 # a prerelease); fall back to the newest entry of the full list.
