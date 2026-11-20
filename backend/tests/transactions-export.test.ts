@@ -143,6 +143,31 @@ describe.skipIf(!RUN)('GET /api/transactions/export', () => {
     expect(bySearch.body).toContain('VIR SALAIRE ACME');
   });
 
+  // Last on purpose: it adds rows the counting tests above don't expect.
+  it('neutralizes formula-looking labels and notes but keeps amounts numeric', async () => {
+    const acct = await app.inject({
+      method: 'POST', url: '/api/accounts', headers: { cookie },
+      payload: { name: '=Compte piégé', type: 'checking', openingDate: '2026-01-01' },
+    });
+    const accountId = acct.json().account.id;
+    const tx = await app.inject({
+      method: 'POST', url: '/api/transactions', headers: { cookie },
+      payload: {
+        accountId, date: '2026-06-18', amount: '-5.00',
+        rawLabel: '=HYPERLINK("http://evil.example","clic")', notes: '@SUM(1+1)',
+      },
+    });
+    expect(tx.statusCode).toBe(201);
+
+    const res = await app.inject({
+      method: 'GET', url: `/api/transactions/export?accountId=${accountId}`, headers: { cookie },
+    });
+    const row = bodyLines(res.body)[1]!;
+    expect(row).toBe(
+      `2026-06-18;'=Compte piégé;"'=HYPERLINK(""http://evil.example"",""clic"")";Divers;-5,00;'@SUM(1+1)`,
+    );
+  });
+
   it('requires authentication', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/transactions/export' });
     expect(res.statusCode).toBe(401);

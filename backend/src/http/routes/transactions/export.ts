@@ -6,19 +6,7 @@ import { userId } from '../../plugins/auth.js';
 import { ListQuery } from './schemas.js';
 import { buildListWhere } from './filters.js';
 import { todayLocalIso } from '../../../lib/dates.js';
-
-// Quote per RFC 4180, with ';' added to the trigger set since the separator
-// is a semicolon (Excel-FR convention).
-function csvField(value: string): string {
-  if (/[;"\r\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
-  return value;
-}
-
-// "-42.30" → "-42,30" — comma decimals so Excel-FR reads the column as a
-// number instead of a date-ish string.
-function csvAmount(amount: string): string {
-  return amount.replace('.', ',');
-}
+import { csvAmount, csvText } from '../../../lib/csv.js';
 
 const HEADER = ['Date', 'Compte', 'Libellé', 'Catégorie', 'Montant', 'Notes'];
 
@@ -75,11 +63,11 @@ export function registerExport(app: FastifyInstance): void {
     for (const r of rows) {
       lines.push([
         r.date,
-        csvField(accountName.get(r.accountId) ?? ''),
-        csvField(r.rawLabel),
-        csvField(categoryPath(r.categoryId)),
+        csvText(accountName.get(r.accountId) ?? ''),
+        csvText(r.rawLabel),
+        csvText(categoryPath(r.categoryId)),
         csvAmount(r.amount),
-        csvField(r.notes ?? ''),
+        csvText(r.notes ?? ''),
       ].join(';'));
     }
     // BOM so Excel detects UTF-8 instead of guessing a legacy codepage.
