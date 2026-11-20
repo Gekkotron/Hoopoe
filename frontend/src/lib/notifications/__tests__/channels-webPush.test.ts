@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 import { sendWebPush, requestWebPushPermission } from '../channels/webPush.js';
 import { renderBody, renderTitle } from '../render-client.js';
 import type { Notification } from '../../../../../shared/api-contracts.js';
@@ -22,7 +22,7 @@ function makeNotification(): Notification {
 }
 
 describe('sendWebPush', () => {
-  let ctor: ReturnType<typeof vi.fn>;
+  let ctor: Mock<(...args: unknown[]) => void>;
   let permission: NotificationPermission;
 
   beforeEach(() => {

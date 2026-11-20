@@ -24,9 +24,9 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov', 'json-summary'],
       reportsDirectory: './coverage',
-      // Include every source file in the report, even those no test touches,
-      // so the number reflects the whole codebase (not just executed files).
-      all: true,
+      // Vitest 4+ dropped `coverage.all`: files matched by `include` are
+      // always reported, even those no test touches, so the number reflects
+      // the whole codebase (not just executed files).
       include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'src/**/*.d.ts',
