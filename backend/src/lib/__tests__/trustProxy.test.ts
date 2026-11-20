@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseTrustProxy } from '../trustProxy.js';
+import { isHopCount, parseTrustProxy } from '../trustProxy.js';
 
 describe('parseTrustProxy', () => {
   it('is off when unset, empty or explicitly false', () => {
@@ -12,9 +12,13 @@ describe('parseTrustProxy', () => {
     expect(parseTrustProxy('true')).toBe(true);
   });
 
-  it('reads a bare positive integer as a hop count', () => {
-    expect(parseTrustProxy('1')).toBe(1);
-    expect(parseTrustProxy(' 2 ')).toBe(2);
+  it('refuses a bare hop count, which Fastify now fails closed', () => {
+    expect(isHopCount('1')).toBe(true);
+    expect(isHopCount(' 2 ')).toBe(true);
+    expect(isHopCount('0')).toBe(false);
+    expect(isHopCount('loopback')).toBe(false);
+    expect(isHopCount(undefined)).toBe(false);
+    expect(() => parseTrustProxy('1')).toThrow(/hop count/);
   });
 
   it('splits a comma list of addresses, CIDRs and presets', () => {

@@ -46,6 +46,21 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
 
 - An MCP token no longer implies write access to every transaction by
   default (see the read-only scope above).
+- **Production dependencies updated to clear the non-breaking npm
+  advisories.** Backend (fastify, @fastify/static, find-my-way, fast-uri…),
+  MCP bridge (@modelcontextprotocol/sdk, proxy-addr, body-parser…) and the
+  website's Docusaurus (3.10.2, all packages in lockstep). The remaining
+  advisories need major upgrades (drizzle-orm, sharp, zod, csv-parse,
+  exceljs, react-router 7) and are tracked one by one.
+- **Dependabot** now opens weekly grouped update PRs for npm (backend,
+  frontend, mcp, website), cargo, GitHub Actions and Docker base images.
+
+### Changed
+- **`TRUST_PROXY` no longer accepts a hop count** (`1`, `2`, …). Fastify
+  5.12 treats a hop count as "trust nothing", which would silently put
+  every client back in one rate-limit bucket, so the backend now refuses to
+  boot with one. List the proxy addresses, CIDRs or presets instead (the
+  Docker Compose default `loopback,uniquelocal` is unaffected).
 
 ## [1.0.0-rc.10] - 2026-10-20
 
