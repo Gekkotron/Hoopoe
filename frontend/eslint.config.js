@@ -34,6 +34,15 @@ export default tseslint.config(
     },
     rules: {
       ...reactHooks.configs.recommended.rules,
+      // eslint-plugin-react-hooks 7 bundles React Compiler diagnostics into
+      // `recommended`. This app does not use the React Compiler, and these
+      // three flag long-standing, working patterns (ref reads in render,
+      // resetting form state in effects when a modal opens, ...) across ~50
+      // sites. rules-of-hooks and exhaustive-deps stay enforced. Revisit
+      // together with a React Compiler adoption.
+      'react-hooks/refs': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/immutability': 'off',
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
