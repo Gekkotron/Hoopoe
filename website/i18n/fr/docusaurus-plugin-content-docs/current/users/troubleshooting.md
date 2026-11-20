@@ -683,8 +683,13 @@ backend par défaut est `8001` — modifiez-le si vous avez fixé
 ### Endpoint `/metrics`
 
 ```sh
-curl -s http://localhost:8001/metrics
+curl -s -H "Authorization: Bearer $METRICS_TOKEN" http://localhost:8001/metrics
 ```
+
+Un 404 signifie que l'endpoint est désactivé : définissez `METRICS_TOKEN`
+dans `.env` (ou `METRICS_PUBLIC=true` pour le servir sans authentification,
+puis retirez l'en-tête) et redémarrez. Un 401 signifie que le jeton est
+absent ou incorrect.
 
 Expose les compteurs et histogrammes au format Prometheus. Les deux
 lignes utiles à grepper quand quelque chose paraît lent sont

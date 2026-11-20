@@ -36,6 +36,10 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-loopback,uniquelocal}
       # Set to false in .env once everyone has an account.
       ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-true}
+      # /metrics needs a bearer token (>= 16 chars); without one it is 404
+      # unless METRICS_PUBLIC=true.
+      METRICS_TOKEN: ${METRICS_TOKEN:-}
+      METRICS_PUBLIC: ${METRICS_PUBLIC:-false}
       # Wall-clock features (bank-sync retrieval hour) follow this timezone;
       # containers default to UTC otherwise. Node honors TZ without tzdata.
       TZ: ${TZ:-UTC}

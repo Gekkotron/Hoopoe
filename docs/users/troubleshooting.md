@@ -621,8 +621,12 @@ port is `8001` — change it if you set `BACKEND_PORT` in `.env`.
 ### Metrics endpoint
 
 ```sh
-curl -s http://localhost:8001/metrics
+curl -s -H "Authorization: Bearer $METRICS_TOKEN" http://localhost:8001/metrics
 ```
+
+A 404 means the endpoint is disabled: set `METRICS_TOKEN` in `.env` (or
+`METRICS_PUBLIC=true` to serve it without authentication, then drop the
+header) and restart. A 401 means the token is missing or wrong.
 
 Exposes Prometheus-format counters and histograms. The two lines worth
 grepping for when something feels slow are `hoopoe_http_request_duration_seconds`

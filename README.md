@@ -383,9 +383,11 @@ valeur *par défaut*, passez par Réglages.
 ## Metrics (Prometheus)
 
 The backend exposes Prometheus metrics at `GET /metrics` on the same
-port as the API. There is no authentication — the endpoint is designed
-for a LAN-only deployment. Rate-limited to 20 requests per minute per
-client IP; a normal Prometheus scrape is 2–4 requests per minute.
+port as the API. It is disabled by default (404). Set `METRICS_TOKEN`
+in `.env` to enable it behind a bearer token, or `METRICS_PUBLIC=true` to
+serve it without authentication on a trusted LAN (ignored when a token
+is set). Rate-limited to 20 requests per minute per client IP; a normal
+Prometheus scrape is 2–4 requests per minute.
 
 Example scrape config:
 
@@ -394,6 +396,9 @@ scrape_configs:
   - job_name: hoopoe
     metrics_path: /metrics
     scrape_interval: 30s
+    authorization:
+      type: Bearer
+      credentials: '<your METRICS_TOKEN>'
     static_configs:
       - targets: ['<homelab-host>:<port>']
 ```
