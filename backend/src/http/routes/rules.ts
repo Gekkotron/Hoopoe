@@ -8,6 +8,7 @@ import { recategorizeAll } from '../../domain/rules/recategorize.js';
 import { pgError, parseId } from '../../lib/http.js';
 import { areCategoriesOwned } from '../../domain/ownership.js';
 import { userId } from '../plugins/auth.js';
+import { patchOf } from '../../lib/zodPatch.js';
 
 // A rule can carry an optional splits payload (migration 0042) — when
 // present, ≥2 rows summing to exactly 100 % turn the rule into
@@ -34,7 +35,7 @@ const CreateBody = z.object({
 //   - undefined: leave the current rule_splits set untouched
 //   - null or empty array: revert the rule to single-category mode
 //   - non-empty array: replace the current set
-const UpdateBody = CreateBody.omit({ splits: true }).partial().extend({
+const UpdateBody = patchOf(CreateBody.omit({ splits: true })).extend({
   splits: z.union([SplitsArray, z.null(), z.array(SplitInput).length(0)]).optional(),
 });
 
