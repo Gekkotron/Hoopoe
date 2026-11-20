@@ -7,6 +7,7 @@ import { formatDateTime } from '../../lib/format';
 import { useSettings } from '../../lib/useSettings';
 import { RemoteBackupFields } from './RemoteBackupFields';
 import { useRemoteBackupState } from './useRemoteBackupState';
+import type { JSX } from 'react';
 
 // "Sauvegarde distante" card on the Sauvegarde page: configure a WebDAV or
 // folder destination for scheduled encrypted backups, pick the hour, run

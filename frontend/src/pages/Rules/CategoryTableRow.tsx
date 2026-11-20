@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, type JSX } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';

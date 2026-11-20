@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { formatAmount, formatDate } from '../../lib/format';
 import type { SeriesPoint } from './series';
 import type { CheckpointMark } from './checkpoints';
+import type { JSX } from 'react';
 
 interface Props {
   hovered: SeriesPoint;

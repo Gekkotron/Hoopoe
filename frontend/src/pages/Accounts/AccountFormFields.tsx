@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type JSX } from 'react';
 import { useTranslation } from 'react-i18next';
 import { InfoTip } from '../../components/InfoTip';
 

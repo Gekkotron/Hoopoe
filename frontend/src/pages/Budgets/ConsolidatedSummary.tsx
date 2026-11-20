@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { BudgetConsolidatedBlock } from '../../api/types';
 import { formatAmount } from '../../lib/format';
 import { FxUnmappedWarning } from '../../components/FxUnmappedWarning';
+import type { JSX } from 'react';
 
 interface Props {
   consolidated: BudgetConsolidatedBlock;

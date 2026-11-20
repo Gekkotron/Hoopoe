@@ -3,6 +3,7 @@ import { ZoneCanvas, type PageRect } from './ZoneCanvas.js';
 import { InfoTip } from '../InfoTip';
 import { PAINT_COLOR, type AmountMode } from './constants';
 import type { PdfImportNeedsTemplate } from '../../api/pdf-templates.js';
+import type { JSX } from 'react';
 
 interface ColumnRefs {
   rect: PageRect;

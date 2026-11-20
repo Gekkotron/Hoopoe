@@ -1,6 +1,7 @@
 import type { RecurringEssentialness, RecurringSeries, RecurringStatus } from '../../api/types';
 import { amountSignClass, formatAmount, formatDate } from '../../lib/format';
 import { cadenceLabel } from './lib';
+import type { JSX } from 'react';
 
 interface UpdatePatch {
   status?: RecurringStatus;

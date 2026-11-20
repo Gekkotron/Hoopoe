@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { EnvelopeReportRow } from '../../../api/types';
 import { formatAmount } from '../../../lib/format';
 import { formatSignedMoney, computeTargetProgress, suggestedAssignmentDelta } from '../envelope-math';
+import type { JSX } from 'react';
 
 export function EnvelopeRow(props: {
   row: EnvelopeReportRow;

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, JSX } from 'react';
 import { formatAmount, amountSignClass } from '../lib/format';
 
 // Generic stat card for the Dashboard. Keeps a consistent look so new stats

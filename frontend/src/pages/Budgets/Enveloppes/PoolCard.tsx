@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { EnvelopeReport } from '../../../api/types';
 import { formatAmount } from '../../../lib/format';
 import { formatSignedMoney } from '../envelope-math';
+import type { JSX } from 'react';
 
 export function PoolCard(props: {
   pool: EnvelopeReport['pool'];

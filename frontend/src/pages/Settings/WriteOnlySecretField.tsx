@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import type { JSX } from 'react';
 
 // Input for a secret the server never returns (Discord webhook URL, CallMeBot
 // key). When the secret is already stored and the user has not started

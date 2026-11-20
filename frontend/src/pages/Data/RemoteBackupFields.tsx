@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { isPlainHttp, type RemoteBackupForm } from './remote-backup-lib';
+import type { JSX } from 'react';
 
 const KIND_LABEL_KEYS = {
   webdav: 'backup.remote.kindWebdav',

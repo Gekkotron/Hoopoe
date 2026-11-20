@@ -2,6 +2,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import { ZoneCanvas, type PageRect } from './ZoneCanvas.js';
 import { InfoTip } from '../InfoTip';
 import { PAINT_COLOR } from './constants';
+import type { JSX } from 'react';
 
 interface Props {
   pngBase64: string;

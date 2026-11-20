@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Account } from '../../api/types';
 import type { NotificationPrefs, NotificationPrefsPatch } from '../../lib/settings';

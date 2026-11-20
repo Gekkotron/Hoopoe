@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { FxSection } from './FxSection';
+import type { JSX } from 'react';
 
 export function SettingsFx(): JSX.Element {
   const { t } = useTranslation('settings');

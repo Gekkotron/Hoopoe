@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import type { EnvelopeReportRow } from '../../../api/types';
 import { parseDecimal } from '../../../lib/format';

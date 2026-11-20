@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type JSX } from 'react';
 import { useTranslation } from 'react-i18next';
 import { parseDecimal } from '../../../lib/format';
 import { todayLocalIso } from '../../../lib/dates';

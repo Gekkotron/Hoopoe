@@ -5,6 +5,7 @@ import type { PdfImportNeedsTemplate, PdfImportImported } from '../../api/pdf-te
 import type { Transaction } from '../../api/types';
 import { formatAmount, formatDate, amountSignClass } from '../../lib/format';
 import { PdfTemplateBuilder } from '../../components/PdfTemplateBuilder/index';
+import type { JSX } from 'react';
 
 export function PdfTemplateWizard({
   needsTpl,

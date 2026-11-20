@@ -4,6 +4,7 @@ import type { Account, FileImport } from '../../api/types';
 import { formatDateTime } from '../../lib/format';
 import { getAccountName } from '../../lib/accounts';
 import { SectionRule } from '../../components/SectionRule';
+import type { JSX } from 'react';
 
 export function FileImportsList({
   imports, accounts, onRequestDelete,

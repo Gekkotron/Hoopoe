@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useEnvelopeReport } from '../../lib/useEnvelopes';
 import { formatAmount } from '../../lib/format';
 import { formatSignedMoney } from '../Budgets/envelope-math';
+import type { JSX } from 'react';
 
 function currentMonthYm(): string {
   const d = new Date();

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { Account } from '../../api/types';
+import type { JSX } from 'react';
 
 interface Props {
   value: 'all' | 'available' | number;

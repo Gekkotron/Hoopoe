@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { NotificationPrivacy, NotificationPrefsPatch } from '../../lib/settings';
+import type { JSX } from 'react';
 
 export function NotificationsPrivacyCard({
   prefs,
