@@ -1,6 +1,10 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach } from 'vitest';
+import { __setLookupForTests, __setNetGuardBypassForTests } from '../src/domain/backup/net-guard.js';
+import { DestinationNotAllowedError } from '../src/domain/backup/errors.js';
 import {
   createWebdavProvider,
+  WEBDAV_TIMEOUT_MS,
+  WEBDAV_UPLOAD_TIMEOUT_MS,
   __setBackupFetchForTests,
   BackupProviderError,
 } from '../src/domain/backup/providers.js';
@@ -77,5 +81,81 @@ describe('webdav provider', () => {
       throw new TypeError('fetch failed: ECONNREFUSED');
     }) as typeof fetch);
     await expect(createWebdavProvider(CFG, 'p4ss').list()).rejects.toThrow(BackupProviderError);
+  });
+});
+
+describe('webdav provider hardening', () => {
+  beforeEach(() => __setNetGuardBypassForTests(false));
+  afterEach(() => {
+    __setLookupForTests(null);
+    __setNetGuardBypassForTests(true);
+  });
+
+  const lookupTo = (address: string) =>
+    (async () => [{ address, family: 4 }]) as unknown as Parameters<typeof __setLookupForTests>[0];
+
+  it.each(['http://127.0.0.1:5005/dav', 'http://169.254.169.254/latest', 'http://[::1]/dav'])(
+    'refuses %s before any request is sent',
+    async (url) => {
+      const calls = fakeFetch(() => new Response(null, { status: 201 }));
+      const p = createWebdavProvider({ url, username: 'u', subdir: null }, 'p');
+      await expect(p.upload(NAME, Buffer.from('x'))).rejects.toBeInstanceOf(DestinationNotAllowedError);
+      await expect(p.list()).rejects.toBeInstanceOf(DestinationNotAllowedError);
+      await expect(p.remove(NAME)).rejects.toBeInstanceOf(DestinationNotAllowedError);
+      expect(calls).toHaveLength(0);
+    },
+  );
+
+  it('re-resolves the name before every request (a rebind to loopback is caught)', async () => {
+    const calls = fakeFetch(() => new Response(null, { status: 201 }));
+    __setLookupForTests(lookupTo('192.168.1.20'));
+    const p = createWebdavProvider({ url: 'http://nas.example/dav', username: 'u', subdir: null }, 'p');
+    await p.upload(NAME, Buffer.from('x'));
+    expect(calls).toHaveLength(1);
+    __setLookupForTests(lookupTo('127.0.0.1'));
+    await expect(p.remove(NAME)).rejects.toBeInstanceOf(DestinationNotAllowedError);
+    expect(calls).toHaveLength(1);
+  });
+
+  it('sends a timeout signal on every request and refuses redirects', async () => {
+    const inits: RequestInit[] = [];
+    __setBackupFetchForTests((async (_u: RequestInfo | URL, init?: RequestInit) => {
+      inits.push(init!);
+      return new Response(null, { status: init?.method === 'PROPFIND' ? 207 : 201 });
+    }) as typeof fetch);
+    __setLookupForTests(lookupTo('192.168.1.20'));
+    const p = createWebdavProvider({ url: 'http://nas.example/dav', username: 'u', subdir: null }, 'p');
+    await p.upload(NAME, Buffer.from('x'));
+    await p.list();
+    expect(inits.map((i) => i.method)).toEqual(['PUT', 'PROPFIND']);
+    for (const i of inits) {
+      expect(i.signal).toBeInstanceOf(AbortSignal);
+      expect(i.redirect).toBe('error');
+    }
+    expect(WEBDAV_UPLOAD_TIMEOUT_MS).toBeGreaterThan(WEBDAV_TIMEOUT_MS);
+  });
+
+  it('classifies a timeout and a refused connection', async () => {
+    __setLookupForTests(lookupTo('192.168.1.20'));
+    const p = createWebdavProvider({ url: 'http://nas.example/dav', username: 'u', subdir: null }, 'p');
+    __setBackupFetchForTests((async () => {
+      throw Object.assign(new Error('The operation was aborted due to timeout'), { name: 'TimeoutError' });
+    }) as typeof fetch);
+    expect(await p.list().catch((e) => e.category)).toBe('timed out');
+    __setBackupFetchForTests((async () => {
+      throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } });
+    }) as typeof fetch);
+    expect(await p.list().catch((e) => e.category)).toBe('connection refused');
+  });
+
+  it('rejects CR/LF/NUL in username and subdir', () => {
+    for (const bad of [
+      { username: 'u\r\nX: y', subdir: null },
+      { username: 'u', subdir: 'a\nb' },
+    ]) {
+      expect(() => createWebdavProvider({ url: 'http://nas.example/dav', ...bad }, 'p')).toThrow(
+        BackupProviderError,
+      );
+    }
   });
 });

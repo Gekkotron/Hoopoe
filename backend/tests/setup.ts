@@ -30,6 +30,14 @@ process.env.SESSION_SECRET =
   process.env.SESSION_SECRET ??
   'pglite-test-session-secret-not-a-real-secret-0123456789';
 
+// Backup destinations: the fake WebDAV/FTP servers live on 127.0.0.1, which
+// the production net guard refuses, so the guard is bypassed for the suite
+// (the setter only works under NODE_ENV=test; net-guard tests switch it back
+// off). Folder destinations are confined to BACKUP_FOLDER_ROOT; tests create
+// their folders under the OS temp dir.
+process.env.BACKUP_FOLDER_ROOT ??= (await import('node:os')).tmpdir();
+(await import('../src/domain/backup/net-guard.js')).__setNetGuardBypassForTests(true);
+
 // Opt into test-only routes (e.g. /api/auth/2fa/__debug/current-code). Two
 // independent gates in the route handlers (NODE_ENV=test AND this var) so
 // a misdeployed image with only one of them set can't leak live TOTP
