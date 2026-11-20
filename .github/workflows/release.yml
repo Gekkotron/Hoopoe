@@ -36,9 +36,9 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
@@ -82,15 +82,15 @@ jobs:
             dockerfile: frontend/Dockerfile
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Build stages are pinned to $BUILDPLATFORM in both Dockerfiles, so
       # QEMU only executes the thin per-arch runtime layers — the heavy
       # npm/tsc/vite work runs once, natively.
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -98,7 +98,7 @@ jobs:
 
       - name: Compute image tags
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           # The owner segment is lowercased automatically →
           # ghcr.io/gekkotron/<image>.
@@ -110,7 +110,7 @@ jobs:
             type=semver,pattern={{version}}
 
       - name: Build and push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
@@ -158,9 +158,9 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
 
@@ -169,7 +169,7 @@ jobs:
           targets: ${{ matrix.tauri_target }}
 
       - name: Cache cargo registry + target
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cargo/registry
@@ -294,7 +294,7 @@ jobs:
       # the installer downloadable for debugging — but the job (and thus the
       # release) stays failed.
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: desktop-${{ matrix.tauri_target }}
           path: ${{ steps.artifact.outputs.path }}
@@ -336,7 +336,7 @@ jobs:
 
       - name: Upload installed-smoke Playwright report
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: installed-smoke-report-${{ matrix.tauri_target }}
           path: frontend/playwright-report/
@@ -351,7 +351,7 @@ jobs:
     needs: [verify-build, docker-images, desktop]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Extract version from tag
         id: version
@@ -384,7 +384,7 @@ jobs:
           echo "-----------------------"
 
       - name: Download desktop installers
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: desktop-*
           path: desktop-assets
@@ -414,7 +414,7 @@ jobs:
           } >> release-notes.md
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: v${{ steps.version.outputs.version }}
           body_path: release-notes.md
