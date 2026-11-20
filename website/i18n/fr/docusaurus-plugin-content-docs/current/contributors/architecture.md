@@ -130,8 +130,9 @@ tout le reste est identique.
 ## Observabilité
 
 Le backend expose des métriques Prometheus sur `GET /metrics` sur le
-même port que l'API — sans auth (LAN uniquement), limité à 20 requêtes
-par minute par IP client. Voir la section *Metrics* du README de
+même port que l'API, limité à 20 requêtes par minute par IP client.
+La route n'existe que si `METRICS_TOKEN` est défini (jeton bearer
+requis) ou `METRICS_PUBLIC=true` (sans auth) ; sinon elle renvoie 404. Voir la section *Metrics* du README de
 premier niveau pour les labels et la config de scrape canonique.
 
 ## Pour aller plus loin

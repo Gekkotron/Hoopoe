@@ -22,6 +22,20 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
   value. Existing plaintext values are encrypted automatically at the next
   start, and a `SESSION_SECRET` rotation re-encrypts them.
 
+- **`/metrics` is disabled unless you configure it (behaviour change).**
+  Without `METRICS_TOKEN` the endpoint used to be public and leaked
+  cross-user counts and backup timestamps. It now returns 404 when
+  `METRICS_TOKEN` is unset. Unauthenticated scrapers will get 404 after
+  upgrading: set `METRICS_TOKEN` and send `Authorization: Bearer <token>`,
+  or set `METRICS_PUBLIC=true` to keep the old open endpoint (ignored when
+  a token is set).
+
+- The LAN/Docker server entry now refuses to start with `AUTH_MODE=none`
+  (it listens on all interfaces, which would leave the API open). In
+  desktop mode the backend, including the locked-boot unlock screen, now
+  answers only requests whose `Host` is `127.0.0.1`, `localhost` or `[::1]`,
+  which blocks DNS-rebinding access from web pages.
+
 ## [1.0.0-rc.10] - 2026-10-20
 
 Re-cut of rc.9 — same product. rc.9 was never published: its Release

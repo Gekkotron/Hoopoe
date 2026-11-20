@@ -14,6 +14,7 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { readSnapshot } from '../db/snapshotStore.js';
+import { isLoopbackHost } from '../http/loopbackHost.js';
 import { decryptBuffer, EnvelopeDecryptError } from '../lib/binaryEnvelope.js';
 
 const PAGE = `<!doctype html>
@@ -198,6 +199,11 @@ export function runUnlockServer(opts: { dir: string; port?: number }): Promise<U
     async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
       const method = req.method ?? 'GET';
       const url = req.url ?? '/';
+
+      if (!isLoopbackHost(req.headers.host)) {
+        sendJson(res, 403, { error: 'forbidden host' });
+        return;
+      }
 
       if (method === 'GET' && url === '/') {
         res.writeHead(200, {

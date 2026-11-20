@@ -124,8 +124,9 @@ is the same.
 ## Observability
 
 The backend exposes Prometheus metrics at `GET /metrics` on the same
-port as the API — no auth (LAN-only), rate-limited to 20 requests per
-minute per client IP. See the top-level README's *Metrics* section
+port as the API, rate-limited to 20 requests per minute per client IP.
+The route exists only when `METRICS_TOKEN` is set (bearer token required)
+or `METRICS_PUBLIC=true` (no auth); otherwise it returns 404. See the top-level README's *Metrics* section
 for the labels and canonical scrape config.
 
 ## Where to go next

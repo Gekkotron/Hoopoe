@@ -146,16 +146,24 @@ const plugin: FastifyPluginAsync = async (app: FastifyInstance) => {
   });
 
   // Prometheus scrapers can't drive a session cookie, so /metrics is gated
-  // by an optional bearer token instead of app.requireAuth. Without a token
-  // set we warn at startup rather than crash — LAN-only deployments may
-  // deliberately want an open scrape target — but the endpoint exposes
-  // cross-user aggregate counts and backup timestamps to any network
-  // client, so production deployments should always set METRICS_TOKEN.
+  // by a bearer token instead of app.requireAuth. The endpoint exposes
+  // cross-user aggregate counts and backup timestamps, so without
+  // METRICS_TOKEN it is not registered at all (404) unless the operator
+  // opts in to an open endpoint with METRICS_PUBLIC=true.
   const configuredToken = env.METRICS_TOKEN;
-  if (!configuredToken) {
+  if (configuredToken) {
+    if (env.METRICS_PUBLIC) {
+      app.log.warn('METRICS_PUBLIC is ignored because METRICS_TOKEN is set');
+    }
+  } else if (env.METRICS_PUBLIC) {
     app.log.warn(
-      '/metrics is unauthenticated — set METRICS_TOKEN to require a bearer token',
+      '/metrics is unauthenticated (METRICS_PUBLIC=true) — set METRICS_TOKEN to require a bearer token',
     );
+  } else {
+    app.log.info(
+      '/metrics is disabled — set METRICS_TOKEN to enable it with a bearer token, or METRICS_PUBLIC=true to serve it unauthenticated',
+    );
+    return;
   }
 
   app.get('/metrics', {
