@@ -52,6 +52,28 @@ cp .env.example .env
 `openssl rand -hex 32`. Restart the stack: `docker compose down &&
 docker compose up -d`.
 
+### Backend refuses to start: `SESSION_SECRET is the public placeholder`
+
+**Symptom.** After an update, the `backend` container exits on boot and
+`docker compose logs backend` shows
+`SESSION_SECRET: SESSION_SECRET is the public placeholder from .env.example`.
+
+**Cause.** `.env` still holds the sample value that shipped in
+`.env.example`. It is public, and it is the root key for sessions, 2FA,
+bank-sync, backup and MCP secrets, so production builds refuse it.
+
+**Fix.** In `.env`, keep the old value for one boot and set a new one:
+
+```sh
+SESSION_SECRET_PREVIOUS=<the old placeholder value>
+SESSION_SECRET=<output of: openssl rand -hex 32>
+```
+
+Restart the stack. On that boot the backend re-encrypts every 2FA,
+bank-sync, backup and MCP secret under the new key in one transaction and
+logs `session secret rotated`. Then delete the `SESSION_SECRET_PREVIOUS`
+line. Everyone is signed out once, because the session cookies change key.
+
 ### Migration failure on first boot
 
 **Symptom.** The `backend` container exits shortly after `db` becomes

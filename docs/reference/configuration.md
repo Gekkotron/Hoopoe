@@ -27,7 +27,8 @@ fill in the fields marked **required**.
 
 | Variable | Default | Valid values | Effect |
 | --- | --- | --- | --- |
-| `SESSION_SECRET` | *(none)* | ≥ 32 characters | **Required.** Signs the session cookie and derives the MCP payload encryption key. Generate with `openssl rand -hex 32`. Rotating it invalidates every session and every encrypted MCP endpoint. |
+| `SESSION_SECRET` | *(none)* | ≥ 32 characters | **Required.** Signs the session cookie and derives the MCP payload encryption key. Generate with `openssl rand -hex 32`. Also the root key for 2FA, bank-sync and backup secrets. Production refuses the old `.env.example` placeholder (any value containing `replace-me`). Changing it signs everyone out; set `SESSION_SECRET_PREVIOUS` for one boot to keep the encrypted secrets. |
+| `SESSION_SECRET_PREVIOUS` | *(unset)* | string | Only while changing `SESSION_SECRET`: the old value, for one boot. The Docker entry re-encrypts every 2FA, bank-sync, backup and MCP secret under the new key in one transaction, then logs that the variable can be removed. If left set on a later boot, the backend exits without changing anything. |
 | `DATABASE_URL` | *(none)* | Postgres URL | **Required when `DB_DRIVER=postgres`.** Full connection string, e.g. `postgres://athena:…@db:5432/athena`. |
 | `COOKIE_SECURE` | `false` | `true` / `false` / `1` / `0` | Marks the session cookie as `Secure`. Leave `false` on a plain-HTTP LAN deployment — otherwise the browser rejects the cookie and login silently fails. Set to `true` when running behind an HTTPS-terminating reverse proxy. |
 | `NODE_ENV` | `development` | `development` / `production` / `test` | Controls Fastify logging (`pino-pretty` in development, JSON otherwise) and enables the built-in static file server when `SERVE_STATIC` is unset. Docker Compose sets this to `production`. |

@@ -168,4 +168,35 @@ d('migrateSessionSecret', () => {
     const [row] = await db.select().from(userTotp).where(eq(userTotp.userId, uid));
     expect(row!.secretCiphertext).toBe(seededTotp);
   });
+  it('rotates from SESSION_SECRET_PREVIOUS (the .env.example placeholder) to the new secret', async () => {
+    const { rotateFromPreviousSecret } = await import('../src/entry/session-secret-migration.js');
+    const { db } = await import('../src/db/client.js');
+    const { userTotp } = await import('../src/db/schema.js');
+    const { seedUser } = await import('./helpers/seedUser.js');
+    const { totpKey, encryptTotpSecret, decryptTotpSecret } = await import(
+      '../src/domain/auth/totp-crypto.js'
+    );
+
+    const uid = await seedUser();
+    const OLD = 'replace-me-with-at-least-32-random-characters-please';
+    const NEW = randomBytes(32).toString('hex');
+    await db.insert(userTotp).values({
+      userId: uid,
+      secretCiphertext: encryptTotpSecret(totpKey(OLD), uid, 'JBSWY3DPEHPK3PXP'),
+    });
+
+    // Nothing to do when unset or unchanged.
+    expect(await rotateFromPreviousSecret(undefined, NEW)).toBeNull();
+    expect(await rotateFromPreviousSecret(NEW, NEW)).toBeNull();
+
+    const counts = await rotateFromPreviousSecret(OLD, NEW);
+    expect(counts?.userTotp).toBe(1);
+    const [row] = await db.select().from(userTotp).where(eq(userTotp.userId, uid));
+    expect(decryptTotpSecret(totpKey(NEW), uid, row!.secretCiphertext)).toBe('JBSWY3DPEHPK3PXP');
+
+    // Left set by mistake on the next boot: refuses rather than corrupting.
+    await expect(rotateFromPreviousSecret(OLD, NEW)).rejects.toThrow();
+    const [after] = await db.select().from(userTotp).where(eq(userTotp.userId, uid));
+    expect(after!.secretCiphertext).toBe(row!.secretCiphertext);
+  });
 });

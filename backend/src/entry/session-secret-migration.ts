@@ -107,3 +107,16 @@ export async function migrateSessionSecret(
     return counts;
   });
 }
+
+// Docker / server path: operator-driven rotation. When SESSION_SECRET_PREVIOUS
+// is set and differs from SESSION_SECRET, re-encrypt everything from the old
+// key to the new one. Returns null when there is nothing to do. Throws (and
+// rolls back) when a row does not decrypt under `previous` — typically
+// because an earlier boot already rotated and the variable was left set.
+export async function rotateFromPreviousSecret(
+  previous: string | undefined,
+  current: string,
+): Promise<SessionSecretMigrationCounts | null> {
+  if (!previous || previous === current) return null;
+  return migrateSessionSecret(previous, current);
+}

@@ -54,6 +54,31 @@ cp .env.example .env
 avec `openssl rand -hex 32`. Redémarrez la stack :
 `docker compose down && docker compose up -d`.
 
+### Le backend refuse de démarrer : `SESSION_SECRET is the public placeholder`
+
+**Symptôme.** Après une mise à jour, le conteneur `backend` s'arrête au
+démarrage et `docker compose logs backend` affiche
+`SESSION_SECRET: SESSION_SECRET is the public placeholder from .env.example`.
+
+**Cause.** Le `.env` contient encore la valeur d'exemple livrée dans
+`.env.example`. Elle est publique, et c'est la clé racine des sessions, de
+la 2FA, de la synchronisation bancaire, des sauvegardes et du MCP : les
+builds de production la refusent.
+
+**Correctif.** Dans `.env`, gardez l'ancienne valeur pour un démarrage et
+définissez-en une nouvelle :
+
+```sh
+SESSION_SECRET_PREVIOUS=<l'ancienne valeur d'exemple>
+SESSION_SECRET=<résultat de : openssl rand -hex 32>
+```
+
+Redémarrez la stack. À ce démarrage, le backend rechiffre tous les secrets
+2FA, synchronisation bancaire, sauvegarde et MCP sous la nouvelle clé, en
+une seule transaction, et journalise `session secret rotated`. Supprimez
+ensuite la ligne `SESSION_SECRET_PREVIOUS`. Tout le monde est déconnecté
+une fois, car les cookies de session changent de clé.
+
 ### Échec de migration au premier démarrage
 
 **Symptôme.** Le conteneur `backend` s'arrête peu après que `db`
