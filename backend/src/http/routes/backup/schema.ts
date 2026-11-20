@@ -16,15 +16,28 @@ import { LoanBody } from '../loans/schemas.js';
 // CASCADE and leaves files orphaned on disk; restoring the attachments
 // archive rebuilds both DB + disk from its own payload. Users are expected
 // to grab both files for a full snapshot.
-export const VERSION = 4;
+//
+// v5 (additive) adds: envelopeAssignments, envelopeCategorySettings,
+// envelopeMonthHolds, recurringSeries (with links to dump transactions by
+// array index), pdfStatementTemplates, fxRates and userSettings. Every new
+// field is optional, so v1-v4 dumps still parse and restore as before. An
+// older dump cannot preserve the areas that hang off accounts/categories
+// (envelopes, recurring series, PDF templates): the restore wipes those like
+// every other account/category-owned table. It leaves user_settings, fx_rates
+// and envelope_month_holds untouched, since those only belong to the user.
+// pdf_import_drafts are transient parked uploads (24h expiry) and are never
+// dumped.
+export const VERSION = 5;
 
 const categoryKind = z.enum(['expense', 'income', 'transfer', 'neutral']);
 const signConstraint = z.enum(['positive', 'negative', 'any']);
 const matchMode = z.enum(['word', 'substring', 'regex']);
 const categorySource = z.enum(['manual', 'auto', 'default', 'llm']);
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const signedAmount = z.string().regex(/^-?\d+(\.\d{1,2})?$/);
 
 export const BackupBody = z.object({
-  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
+  version: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4), z.literal(5)]),
   accounts: z.array(
     z.object({
       name: z.string(),
@@ -216,6 +229,81 @@ export const BackupBody = z.object({
       updatedAt: z.string().datetime().optional(),
     }),
   ).optional(),
+  // --- v5 additions (all optional; see the VERSION comment) ---
+  // Envelope budgeting. Categories are referenced by (name, parent name),
+  // like budgets; a row whose category did not restore is skipped.
+  envelopeAssignments: z.array(
+    z.object({
+      category: z.string(),
+      categoryParent: z.string().nullable().optional(),
+      month: isoDate,
+      amount: signedAmount,
+      currency: z.string().regex(/^[A-Z]{3}$/),
+    }),
+  ).optional(),
+  envelopeCategorySettings: z.array(
+    z.object({
+      category: z.string(),
+      categoryParent: z.string().nullable().optional(),
+      targetAmount: signedAmount.nullable(),
+      targetDate: isoDate.nullable(),
+      targetKind: z.enum(['save_by_date', 'monthly_recurring', 'save_up_to']).nullable(),
+      overspendPolicy: z.enum(['rollover_negative', 'reallocate_manual']),
+    }),
+  ).optional(),
+  envelopeMonthHolds: z.array(
+    z.object({ month: isoDate, amount: signedAmount }),
+  ).optional(),
+  // Detected recurring series. `transactions` lists the series' member
+  // transactions as 0-based indices into this dump's `transactions` array
+  // (transactions have no natural key).
+  recurringSeries: z.array(
+    z.object({
+      label: z.string(),
+      cadenceDays: z.number().int(),
+      avgAmount: signedAmount,
+      amountStddev: signedAmount,
+      category: z.string().nullable(),
+      categoryParent: z.string().nullable().optional(),
+      firstSeenAt: isoDate,
+      lastSeenAt: isoDate,
+      nextDueAt: isoDate,
+      status: z.enum(['detected', 'confirmed', 'dismissed']),
+      essentialness: z.enum(['essential', 'discretionary']).nullable(),
+      transactions: z.array(z.number().int().min(0)),
+    }),
+  ).optional(),
+  // Learned PDF statement layouts. `account` null = a layout not tied to an
+  // account.
+  pdfStatementTemplates: z.array(
+    z.object({
+      fingerprint: z.string(),
+      account: z.string().nullable(),
+      label: z.string(),
+      zones: z.record(z.string(), z.unknown()),
+      source: z.string(),
+    }),
+  ).optional(),
+  fxRates: z.array(
+    z.object({
+      from: z.string().regex(/^[A-Z]{3}$/),
+      to: z.string().regex(/^[A-Z]{3}$/),
+      effectiveFrom: isoDate,
+      rate: z.string().regex(/^\d+(\.\d{1,10})?$/),
+    }),
+  ).optional(),
+  // The user_settings JSON with the notification secrets (Discord webhook,
+  // CallMeBot key, plaintext or encrypted) removed, and the keys that hold
+  // account database ids moved out into `accountRefs` by account name.
+  userSettings: z.object({
+    settings: z.record(z.string(), z.unknown()),
+    accountRefs: z.object({
+      transactionsDefaultAccount: z.string().nullable().optional(),
+      dashboardChartScope: z.string().nullable().optional(),
+      bigTransactionThresholds: z.record(z.string(), z.number()).optional(),
+      accountLowFloors: z.record(z.string(), z.number()).optional(),
+    }).optional(),
+  }).optional(),
 });
 
 export type BackupDump = z.infer<typeof BackupBody>;

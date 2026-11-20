@@ -114,10 +114,15 @@ Prefer the built-in remote backups above. If you want full control over transpor
 1. **Back up first.** A restore overwrites all data for the current user. Take an export of the present before you go.
 2. Open **Settings → Data → Backup**, *Restore* section.
 3. Pick your `.json` file. Hoopoe will:
-   - check that the format version is one it knows (v1 to v4 today);
+   - check that the format version is one it knows (v1 to v5 today);
    - delete the current user's rows (in a transaction);
-   - re-inject accounts, categories, rules, budgets, checkpoints, imports and transactions.
+   - re-inject accounts, categories, rules, budgets, checkpoints, imports and transactions;
+   - from a v5 file, also envelope assignments, targets and month holds, recurring series (with their transactions), learned PDF statement layouts, FX rates and your settings, including notification preferences.
 4. The page redirects to the dashboard. Verify that the balances, budgets and rules match what you expected.
+
+**What an older file cannot restore.** Files exported before format v5 do not carry envelopes, recurring series or PDF statement layouts. Those hang off accounts and categories, which a restore replaces, so restoring an older file empties them (recurring series are re-detected, the others must be set up again). Your settings, FX rates and envelope month holds are left exactly as they are when the file does not carry them.
+
+**Notification secrets are never exported.** The Discord webhook URL and the CallMeBot API key stay on the machine they were entered on: a restore keeps the ones already configured there and never writes them from the file. On a new machine, enter them again in Settings → Notifications. The same goes for 2FA, MCP tokens, bank-sync credentials and backup destination passwords.
 
 Because the file is portable, the same procedure works to migrate from a Docker server to the desktop app (or the other way round).
 

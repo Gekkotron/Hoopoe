@@ -75,21 +75,27 @@ export async function restoreTransactions(
   accountIdByName: Map<string, number>,
   cats: CategoryMaps,
   fileImportIdByKey: Map<string, number>,
+  // Optional out-param: filled with (index in `dumpTransactions` -> new id).
+  // Recurring series restore their links through it; rows skipped above
+  // (unresolved account) simply have no entry.
+  idByDumpIndex?: Map<number, number>,
 ): Promise<number> {
   // Pre-resolve every row's foreign keys once and drop any whose account
   // did not resolve (matches the pre-refactor per-row skip). This gives us
   // a flat array we can chunk-INSERT in constant round-trips.
   const rows: Array<{
     input: BackupDump['transactions'][number];
+    dumpIndex: number;
     values: typeof transactions.$inferInsert;
   }> = [];
-  for (const t of dumpTransactions) {
+  for (const [dumpIndex, t] of dumpTransactions.entries()) {
     const accId = resolveNameToId(t.account, accountIdByName);
     if (accId === null) continue;
     const catId = resolveCategoryRef(t.category, t.categoryParent, cats.categoryIdByPath, cats.categoryIdsByName);
     const srcId = resolveNameToId(t.sourceFileKey, fileImportIdByKey);
     rows.push({
       input: t,
+      dumpIndex,
       values: {
         userId: uid,
         accountId: accId,
@@ -128,6 +134,9 @@ export async function restoreTransactions(
       .values(slice.map((r) => r.values))
       .returning({ id: transactions.id });
     for (const r of returned) insertedIds.push(r.id);
+  }
+  if (idByDumpIndex) {
+    for (let i = 0; i < rows.length; i++) idByDumpIndex.set(rows[i]!.dumpIndex, insertedIds[i]!);
   }
 
   // Bulk INSERT every split row from every restored parent. Same

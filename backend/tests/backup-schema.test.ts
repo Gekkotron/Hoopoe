@@ -12,7 +12,7 @@ const minimalDump = {
 
 describe('backup/schema.ts', () => {
   it('exports the current schema version constant', () => {
-    expect(VERSION).toBe(4);
+    expect(VERSION).toBe(5);
   });
 
   it('accepts a minimal, well-formed dump', () => {
@@ -21,7 +21,7 @@ describe('backup/schema.ts', () => {
   });
 
   it('rejects a dump with the wrong version literal', () => {
-    const bad = { ...minimalDump, version: 5 as unknown as 1 };
+    const bad = { ...minimalDump, version: 6 as unknown as 1 };
     const parsed = BackupBody.safeParse(bad);
     expect(parsed.success).toBe(false);
   });
@@ -39,6 +39,28 @@ describe('backup/schema.ts', () => {
   it('accepts version 4 (categoryParent-disambiguated dumps)', () => {
     const parsed = BackupBody.safeParse({ ...minimalDump, version: 4 as const });
     expect(parsed.success).toBe(true);
+  });
+
+  it('accepts version 5 (envelopes, recurring series, templates, FX, settings)', () => {
+    const parsed = BackupBody.safeParse({ ...minimalDump, version: 5 as const });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects a v5 userSettings block whose settings is not an object', () => {
+    const parsed = BackupBody.safeParse({ ...minimalDump, version: 5 as const, userSettings: { settings: 'x' } });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('rejects a recurring series with a negative transaction index', () => {
+    const parsed = BackupBody.safeParse({
+      ...minimalDump, version: 5 as const,
+      recurringSeries: [{
+        label: 'x', cadenceDays: 30, avgAmount: '-1.00', amountStddev: '0.00', category: null,
+        firstSeenAt: '2026-01-01', lastSeenAt: '2026-02-01', nextDueAt: '2026-03-01',
+        status: 'detected', essentialness: null, transactions: [-1],
+      }],
+    });
+    expect(parsed.success).toBe(false);
   });
 
   it('rejects a dump missing required top-level keys', () => {

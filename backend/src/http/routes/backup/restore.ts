@@ -3,6 +3,13 @@ import { db } from '../../../db/client.js';
 import { userId } from '../../plugins/auth.js';
 import { wipeUserData } from './wipe.js';
 import { restoreLoans } from './restore-loans.js';
+import {
+  restoreEnvelopes,
+  restoreFxRates,
+  restorePdfTemplates,
+  restoreRecurringSeries,
+  restoreUserSettings,
+} from './restore-v5.js';
 import { BackupBody } from './schema.js';
 import { decryptEnvelope, isEncryptedEnvelope } from './crypto.js';
 import { flushSnapshots } from '../../../db/snapshotScheduler.js';
@@ -59,10 +66,18 @@ export function registerRestoreRoute(app: FastifyInstance): void {
     const result = await db.transaction(async (tx) => {
       // TRUNCATE when solo, per-user DELETEs otherwise — see wipe.ts for the
       // PGlite busy-wait rationale.
-      const bankLinks = await wipeUserData(tx, uid);
+      // Optional v5 sections: replaced only when the dump carries them (an
+      // older dump leaves user_settings, fx_rates and month holds untouched).
+      const snapshot = await wipeUserData(tx, uid, {
+        userSettings: dump.userSettings !== undefined,
+        fxRates: dump.fxRates !== undefined,
+        envelopeMonthHolds: dump.envelopeMonthHolds !== undefined,
+        pdfStatementTemplates: dump.pdfStatementTemplates !== undefined,
+        recurringSeries: dump.recurringSeries !== undefined,
+      });
 
       const accountIdByName = await restoreAccounts(tx, uid, dump.accounts);
-      const unlinkedBankAccounts = await relinkBankAccounts(tx, bankLinks, accountIdByName);
+      const unlinkedBankAccounts = await relinkBankAccounts(tx, snapshot.bankLinks, accountIdByName);
       const cats = await restoreCategoryTree(tx, uid, dump.categories);
       await restoreFilenamePatterns(tx, uid, dump.accountFilenamePatterns, accountIdByName);
       const rulesResult = await restoreRules(tx, uid, dump.rules, cats);
@@ -72,7 +87,10 @@ export function registerRestoreRoute(app: FastifyInstance): void {
       const budgetsInserted = await restoreBudgets(tx, uid, dump.budgets ?? [], accountIdByName, cats, req.log);
       const { map: fileImportIdByKey, count: fileImportsInserted } =
         await restoreFileImports(tx, uid, dump.fileImports ?? [], accountIdByName);
-      const txCount = await restoreTransactions(tx, uid, dump.transactions, accountIdByName, cats, fileImportIdByKey);
+      const txIdByDumpIndex = new Map<number, number>();
+      const txCount = await restoreTransactions(
+        tx, uid, dump.transactions, accountIdByName, cats, fileImportIdByKey, txIdByDumpIndex,
+      );
       const goals = await restoreSavingsGoalsAndEvents(
         tx,
         uid,
@@ -87,6 +105,20 @@ export function registerRestoreRoute(app: FastifyInstance): void {
         accountIdByName,
       );
       const loansInserted = await restoreLoans(tx, uid, dump.loans ?? []);
+      const envelopes = await restoreEnvelopes(
+        tx,
+        uid,
+        dump.envelopeAssignments ?? [],
+        dump.envelopeCategorySettings ?? [],
+        dump.envelopeMonthHolds ?? [],
+        cats,
+      );
+      const series = await restoreRecurringSeries(tx, uid, dump.recurringSeries ?? [], cats, txIdByDumpIndex);
+      const templates = await restorePdfTemplates(tx, uid, dump.pdfStatementTemplates ?? [], accountIdByName);
+      const fxInserted = await restoreFxRates(tx, uid, dump.fxRates ?? []);
+      if (dump.userSettings) {
+        await restoreUserSettings(tx, uid, dump.userSettings, snapshot, accountIdByName);
+      }
 
       return {
         imported: {
@@ -102,11 +134,23 @@ export function registerRestoreRoute(app: FastifyInstance): void {
           savingsGoalEvents: goals.eventsInserted,
           accountValuations: valuationsInserted,
           loans: loansInserted,
+          envelopeAssignments: envelopes.assignmentsInserted,
+          envelopeCategorySettings: envelopes.settingsInserted,
+          envelopeMonthHolds: envelopes.holdsInserted,
+          recurringSeries: series.inserted,
+          pdfStatementTemplates: templates.inserted,
+          fxRates: fxInserted,
+          userSettings: dump.userSettings ? 1 : 0,
         },
         skipped: {
           rules: rulesResult.skippedSplits,
           savingsGoals: goals.goalsSkipped,
           savingsGoalEvents: goals.eventsSkipped,
+          envelopeAssignments: envelopes.assignmentsSkipped,
+          envelopeCategorySettings: envelopes.settingsSkipped,
+          recurringSeries: series.skipped,
+          recurringSeriesTransactions: series.linksSkipped,
+          pdfStatementTemplates: templates.skipped,
         },
         unlinkedBankAccounts,
       };

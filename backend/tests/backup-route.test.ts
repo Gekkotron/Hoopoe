@@ -109,7 +109,7 @@ describe.skipIf(!RUN)('/api/backup', () => {
     it('carries version + counts + rows inside the envelope', async () => {
       await seedSomeData();
       const dump = await exportDump();
-      expect(dump.version).toBe(4);
+      expect(dump.version).toBe(5);
       expect(dump.instance).toBe('hoopoe');
       expect(dump.counts.accounts).toBeGreaterThanOrEqual(1);
       expect(dump.counts.categories).toBeGreaterThanOrEqual(1);
@@ -422,7 +422,7 @@ describe.skipIf(!RUN)('/api/backup', () => {
       expect(put.statusCode).toBe(200);
 
       const dump = await exportDump();
-      expect(dump.version).toBe(4);
+      expect(dump.version).toBe(5);
       const dumpedTx = (dump.transactions as Array<{ rawLabel: string; splits?: unknown[] }>)
         .find((t) => t.rawLabel === 'Amazon FR')!;
       expect(dumpedTx.splits).toHaveLength(2);

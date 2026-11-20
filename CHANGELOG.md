@@ -13,6 +13,17 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
 ## [Unreleased]
 
 ### Added
+- **Backup format v5: a restore no longer loses envelopes, recurring series,
+  PDF layouts, FX rates or settings.** The portable dump now also carries
+  envelope assignments, targets and month holds, recurring series with
+  their transaction links, learned PDF statement layouts, FX rates and the
+  settings (notification preferences included), all by natural keys. It is
+  backward compatible: v1 to v4 files still restore as before. An older file
+  empties envelopes, recurring series and PDF layouts (they hang off the
+  replaced accounts and categories) but leaves settings, FX rates and month
+  holds untouched. The Discord webhook URL, the CallMeBot API key and the
+  other secrets (2FA, MCP, bank sync, backup destinations) are never
+  exported, and a restore keeps the ones already on the target.
 - **MCP read-only scope.** MCP tokens can now be limited to read access.
   New users default to read-only: `create_transaction`,
   `update_transaction` and `delete_transaction` are refused (403, enforced
