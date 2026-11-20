@@ -12,9 +12,10 @@ const AccountIdKeyed = z.record(z.string().regex(/^\d+$/), z.number().nonnegativ
 // CallMeBot WhatsApp relay: user activates it by messaging the bot once from
 // their phone, pastes the returned apikey here, and every notification is
 // forwarded as a WhatsApp text. The apikey is a bearer token for *this user's*
-// line only (worst case: someone with the key can send WhatsApp messages to
-// you — annoying, not catastrophic), kept in the user's settings JSONB and
-// never exposed outside the authenticated GET /api/settings response.
+// line only. It is write-only: PATCH accepts it in plaintext (omit = keep,
+// '' = clear), it is stored AES-256-GCM-encrypted (`apiKeyEnc`, see
+// domain/notifications/secrets.ts) and GET /api/settings never returns it,
+// only `hasApiKey`.
 const CallMeBotSchema = z
   .object({
     enabled: z.boolean().optional(),
@@ -31,6 +32,8 @@ const CallMeBotSchema = z
 // Discord channel webhook: the URL is a bearer secret for one channel. The
 // server POSTs to whatever URL is stored, so restrict it to Discord's own
 // webhook endpoints (SSRF guard: no LAN hosts, no arbitrary https targets).
+// Write-only like the CallMeBot key: stored encrypted (`webhookUrlEnc`),
+// GET returns `hasWebhookUrl` instead of the URL.
 const DiscordSchema = z
   .object({
     enabled: z.boolean().optional(),
@@ -139,6 +142,69 @@ export const SettingsSchema = z
 
 export type Settings = z.infer<typeof SettingsSchema>;
 
+// What GET /api/settings returns: the merged settings with the two channel
+// secrets removed and replaced by presence flags.
+export type PublicSettings = Omit<FullSettings, 'notifications'> & {
+  notifications: Omit<FullSettings['notifications'], 'channels'> & {
+    channels: Omit<FullSettings['notifications']['channels'], 'callmebot' | 'discord'> & {
+      callmebot: { enabled: boolean; phone: string; maxPerMinute: number; hasApiKey: boolean };
+      discord: { enabled: boolean; maxPerMinute: number; hasWebhookUrl: boolean };
+    };
+  };
+};
+
+export function toPublicSettings(
+  full: FullSettings,
+  flags: { hasWebhookUrl: boolean; hasApiKey: boolean },
+): PublicSettings {
+  const { callmebot, discord, ...otherChannels } = full.notifications.channels;
+  return {
+    ...full,
+    notifications: {
+      ...full.notifications,
+      channels: {
+        ...otherChannels,
+        callmebot: {
+          enabled: callmebot.enabled,
+          phone: callmebot.phone,
+          maxPerMinute: callmebot.maxPerMinute,
+          hasApiKey: flags.hasApiKey,
+        },
+        discord: {
+          enabled: discord.enabled,
+          maxPerMinute: discord.maxPerMinute,
+          hasWebhookUrl: flags.hasWebhookUrl,
+        },
+      },
+    },
+  };
+}
+
+// The stored blob carries `webhookUrlEnc` / `apiKeyEnc`, which the strict
+// input schema rejects; drop them before parsing so they can't reset every
+// setting. (Their values are read separately by notifications/secrets.ts.)
+function withoutEncryptedSecrets(src: Record<string, unknown>): Record<string, unknown> {
+  const n = src.notifications as { channels?: Record<string, unknown> } | undefined;
+  if (!n || typeof n !== 'object' || !n.channels || typeof n.channels !== 'object') return src;
+  const strip = (v: unknown, k: string): unknown => {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return v;
+    const { [k]: _omit, ...rest } = v as Record<string, unknown>;
+    void _omit;
+    return rest;
+  };
+  return {
+    ...src,
+    notifications: {
+      ...n,
+      channels: {
+        ...n.channels,
+        discord: strip(n.channels.discord, 'webhookUrlEnc'),
+        callmebot: strip(n.channels.callmebot, 'apiKeyEnc'),
+      },
+    },
+  };
+}
+
 export type FullSettings = {
   dashboardRange: DashboardRange;
   dashboardChartScope: DashboardChartScope;
@@ -230,7 +296,9 @@ export function mergeNotifications(
 // clean, complete shape.
 export function mergeSettings(stored: unknown, patch: Partial<Settings> = {}): FullSettings {
   const safe: FullSettings = { ...DEFAULTS, dashboardHiddenSections: [...DEFAULTS.dashboardHiddenSections] };
-  const src = (stored && typeof stored === 'object') ? (stored as Record<string, unknown>) : {};
+  const src = withoutEncryptedSecrets(
+    (stored && typeof stored === 'object') ? (stored as Record<string, unknown>) : {},
+  );
   // Stored blobs are parsed non-strict: a key from a removed setting (e.g.
   // the reverted showUnrealizedGains) is dropped instead of failing the
   // whole parse and resetting every setting. PATCH stays strict.

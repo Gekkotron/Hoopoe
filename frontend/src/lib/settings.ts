@@ -29,7 +29,9 @@ export type DashboardSectionId = (typeof DASHBOARD_SECTION_IDS)[number];
 export interface CallMeBotPrefs {
   enabled: boolean;
   phone: string;
-  apiKey: string;
+  // The key itself is write-only: the server never returns it, only whether
+  // one is stored. Send `apiKey` in a patch to set it ('' clears it).
+  hasApiKey: boolean;
   // Max CallMeBot sends per rolling 1-minute window; 0 = no limit. Only
   // automatic emissions are gated — a manual "Send a test" always goes
   // through.
@@ -38,14 +40,18 @@ export interface CallMeBotPrefs {
 
 export interface DiscordPrefs {
   enabled: boolean;
-  // Discord channel webhook URL; '' = not configured. The backend rejects
-  // anything that isn't a discord.com/api/webhooks URL.
-  webhookUrl: string;
+  // The webhook URL is write-only: the server never returns it, only whether
+  // one is stored. Send `webhookUrl` in a patch to set it ('' clears it); the
+  // backend rejects anything that isn't a discord.com/api/webhooks URL.
+  hasWebhookUrl: boolean;
   // Max Discord sends per rolling 1-minute window; 0 = no limit. Only
   // automatic emissions are gated — a manual "Send a test" always goes
   // through.
   maxPerMinute: number;
 }
+
+export type CallMeBotPatch = Partial<Omit<CallMeBotPrefs, 'hasApiKey'>> & { apiKey?: string };
+export type DiscordPatch = Partial<Omit<DiscordPrefs, 'hasWebhookUrl'>> & { webhookUrl?: string };
 
 export interface NotificationChannels {
   toast: boolean;
@@ -84,8 +90,8 @@ export interface NotificationPrefsPatch {
     toast?: boolean;
     osNative?: boolean;
     webPush?: boolean;
-    callmebot?: Partial<CallMeBotPrefs>;
-    discord?: Partial<DiscordPrefs>;
+    callmebot?: CallMeBotPatch;
+    discord?: DiscordPatch;
   };
   privacy?: Partial<NotificationPrivacy>;
   triggers?: {
@@ -142,18 +148,24 @@ export function mergeNotifications(
   if (!patch) return base;
   const t = patch.triggers;
   // Deep-merge callmebot so a one-field patch (e.g. toggling `enabled`) keeps
-  // `phone`/`apiKey`. The other channels are plain booleans and merge fine
+  // `phone` and the has-key flag. The other channels are plain booleans and merge fine
   // with the spread.
   const callmebot: CallMeBotPrefs = {
     enabled: patch.channels?.callmebot?.enabled ?? base.channels.callmebot.enabled,
     phone: patch.channels?.callmebot?.phone ?? base.channels.callmebot.phone,
-    apiKey: patch.channels?.callmebot?.apiKey ?? base.channels.callmebot.apiKey,
+    hasApiKey:
+      patch.channels?.callmebot?.apiKey === undefined
+        ? base.channels.callmebot.hasApiKey
+        : patch.channels.callmebot.apiKey !== '',
     maxPerMinute:
       patch.channels?.callmebot?.maxPerMinute ?? base.channels.callmebot.maxPerMinute,
   };
   const discord: DiscordPrefs = {
     enabled: patch.channels?.discord?.enabled ?? base.channels.discord.enabled,
-    webhookUrl: patch.channels?.discord?.webhookUrl ?? base.channels.discord.webhookUrl,
+    hasWebhookUrl:
+      patch.channels?.discord?.webhookUrl === undefined
+        ? base.channels.discord.hasWebhookUrl
+        : patch.channels.discord.webhookUrl !== '',
     maxPerMinute:
       patch.channels?.discord?.maxPerMinute ?? base.channels.discord.maxPerMinute,
   };
@@ -187,8 +199,8 @@ export const DEFAULTS: Settings = {
       toast: true,
       osNative: false,
       webPush: false,
-      callmebot: { enabled: false, phone: '', apiKey: '', maxPerMinute: 0 },
-      discord: { enabled: false, webhookUrl: '', maxPerMinute: 0 },
+      callmebot: { enabled: false, phone: '', hasApiKey: false, maxPerMinute: 0 },
+      discord: { enabled: false, hasWebhookUrl: false, maxPerMinute: 0 },
     },
     privacy: { hideAmount: true, hideMerchant: true },
     triggers: {

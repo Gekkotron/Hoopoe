@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
+import { WriteOnlySecretField } from './WriteOnlySecretField';
 import type { NotificationPrefs, NotificationPrefsPatch } from '../../lib/settings';
 import { DiscordChannelFields } from './DiscordChannelFields';
 import { requestWebPushPermission } from '../../lib/notifications/channels/webPush';
@@ -30,20 +31,27 @@ export function NotificationsChannelsCard({
 
   const callmebot = prefs.channels.callmebot;
   const [cmbPhone, setCmbPhone] = useState(callmebot.phone);
-  const [cmbApiKey, setCmbApiKey] = useState(callmebot.apiKey);
+  const [cmbApiKey, setCmbApiKey] = useState('');
+  const [cmbReplacing, setCmbReplacing] = useState(false);
+  const cmbHasKey = callmebot.hasApiKey;
+  useEffect(() => {
+    setCmbReplacing(false);
+    setCmbApiKey('');
+  }, [cmbHasKey]);
   const [cmbMaxPerMinute, setCmbMaxPerMinute] = useState(String(callmebot.maxPerMinute));
   const cmbMaxParsed = Number.parseInt(cmbMaxPerMinute, 10);
   const cmbMaxValue = Number.isFinite(cmbMaxParsed) && cmbMaxParsed >= 0 ? cmbMaxParsed : 0;
   const cmbDirty =
     cmbPhone !== callmebot.phone
-    || cmbApiKey !== callmebot.apiKey
+    || cmbApiKey.trim() !== ''
     || cmbMaxValue !== callmebot.maxPerMinute;
   const saveCallMeBot = () => {
     onPatch({
       channels: {
         callmebot: {
           phone: cmbPhone.trim(),
-          apiKey: cmbApiKey.trim(),
+          // Omitted unless a new key was typed, so the stored key is kept.
+          ...(cmbApiKey.trim() !== '' ? { apiKey: cmbApiKey.trim() } : {}),
           maxPerMinute: cmbMaxValue,
         },
       },
@@ -123,19 +131,17 @@ export function NotificationsChannelsCard({
                 className="input"
               />
             </label>
-            <label className="flex flex-col gap-1">
-              <span className="text-ink-300">
-                {t('settings.notifications.channels.callmebot.apiKeyLabel')}
-              </span>
-              <input
-                type="password"
-                autoComplete="off"
-                placeholder={t('settings.notifications.channels.callmebot.apiKeyPlaceholder')}
-                value={cmbApiKey}
-                onChange={(e) => setCmbApiKey(e.target.value)}
-                className="input"
-              />
-            </label>
+            <WriteOnlySecretField
+              label={t('settings.notifications.channels.callmebot.apiKeyLabel')}
+              placeholder={t('settings.notifications.channels.callmebot.apiKeyPlaceholder')}
+              type="password"
+              isSet={cmbHasKey}
+              replacing={cmbReplacing}
+              value={cmbApiKey}
+              onValueChange={setCmbApiKey}
+              onReplace={() => setCmbReplacing(true)}
+              onClear={() => onPatch({ channels: { callmebot: { apiKey: '' } } })}
+            />
             <label className="flex flex-col gap-1">
               <span className="text-ink-300">
                 {t('settings.notifications.channels.callmebot.maxPerMinuteLabel')}
