@@ -2,7 +2,11 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import session, { MemoryStore } from '@fastify/session';
 
 type Store = InstanceType<typeof MemoryStore>;
-export type RevocationAwareStore = Store & { isRevoked(id: string): boolean };
+export type RevocationAwareStore = Store & {
+  isRevoked(id: string): boolean;
+  /** Destroys (and tombstones) every session of `userId` except `keepId`. */
+  destroyUserSessions(userId: number, keepId?: string): Promise<number>;
+};
 type Callback = (err?: unknown) => void;
 
 // In-memory session store that refuses to resurrect destroyed sessions.
@@ -21,7 +25,10 @@ type Callback = (err?: unknown) => void;
 // block a stale write. Tombstones are dropped once older than `ttlMs`
 // (the cookie lifetime), after which the stale cookie is dead anyway.
 export function createSessionStore(ttlMs = 30 * 24 * 60 * 60 * 1000): RevocationAwareStore {
-  const inner = new MemoryStore();
+  // Our own Map so destroyUserSessions() can find a user's sessions;
+  // MemoryStore has no enumeration API.
+  const sessions = new Map<string, import('fastify').Session>();
+  const inner = new MemoryStore(sessions);
   const tombstones = new Map<string, number>();
 
   const prune = (now: number) => {
@@ -43,7 +50,29 @@ export function createSessionStore(ttlMs = 30 * 24 * 60 * 60 * 1000): Revocation
     tombstones.set(id, now);
     inner.destroy(id, cb);
   };
+  store.destroyUserSessions = async (userId: number, keepId?: string) => {
+    const ids = [...sessions]
+      .filter(([id, s]) => id !== keepId && s.userId === userId)
+      .map(([id]) => id);
+    for (const id of ids) {
+      await new Promise<void>((resolve, reject) => {
+        store.destroy(id, (err?: unknown) => (err ? reject(err) : resolve()));
+      });
+    }
+    return ids.length;
+  };
   return store;
+}
+
+// Signs the user out everywhere else after a credential change (password,
+// 2FA disabled): a session stolen before the change must not outlive it.
+// The current session stays. No-op for stores without the hook (MCP's
+// internal auth has no session) or requests without a signed-in user.
+export async function revokeOtherSessions(req: FastifyRequest): Promise<number> {
+  const store = req.sessionStore as Partial<RevocationAwareStore> | undefined;
+  const uid = req.session?.userId;
+  if (!uid || typeof store?.destroyUserSessions !== 'function') return 0;
+  return store.destroyUserSessions(uid, req.session.sessionId);
 }
 
 // Session-id rotation that actually retires the old id. @fastify/session's

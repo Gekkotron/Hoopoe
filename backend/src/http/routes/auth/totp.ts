@@ -5,7 +5,8 @@ import { and, eq, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { db } from '../../../db/client.js';
 import { users, userTotp, userTotpRecoveryCodes } from '../../../db/schema.js';
 import { env } from '../../../env.js';
-import { rotateSession } from '../../plugins/session-store.js';
+import { revokeOtherSessions, rotateSession } from '../../plugins/session-store.js';
+import { TotpLockout } from '../../../domain/auth/totp-lockout.js';
 import {
   generateCode,
   generateRecoveryCode,
@@ -47,6 +48,7 @@ export async function totpRoutes(app: FastifyInstance): Promise<void> {
   if (env.AUTH_MODE !== 'session') return;
 
   const key = totpKey(env.SESSION_SECRET);
+  const lockout = new TotpLockout();
 
   // -- Status ---------------------------------------------------------
   // Enrolment state for the current user, plus the count of unused
@@ -188,6 +190,16 @@ export async function totpRoutes(app: FastifyInstance): Promise<void> {
     const uid = req.session.userId;
     if (!uid) return reply.code(401).send({ error: 'invalid credentials' });
 
+    // Checked before the code so a locked account learns nothing, even
+    // from a correct guess.
+    const lockedMs = lockout.remainingMs(uid);
+    if (lockedMs > 0) {
+      return reply
+        .code(429)
+        .header('retry-after', String(Math.ceil(lockedMs / 1000)))
+        .send({ error: 'too many attempts, try again later' });
+    }
+
     const [totpRow] = await db
       .select()
       .from(userTotp)
@@ -240,7 +252,11 @@ export async function totpRoutes(app: FastifyInstance): Promise<void> {
       }
     }
 
-    if (!matched) return reply.code(401).send({ error: 'invalid code' });
+    if (!matched) {
+      lockout.recordFailure(uid);
+      return reply.code(401).send({ error: 'invalid code' });
+    }
+    lockout.recordSuccess(uid);
 
     // Rotate the session id on second-factor completion (fixation
     // defence).
@@ -310,6 +326,9 @@ export async function totpRoutes(app: FastifyInstance): Promise<void> {
 
     // Cascade wipes the recovery codes via ON DELETE CASCADE.
     await db.delete(userTotp).where(eq(userTotp.userId, uid));
+    // Sessions opened elsewhere were vouched for by the factor just
+    // removed; keep only this one.
+    await revokeOtherSessions(req);
     return { ok: true };
   });
 

@@ -50,6 +50,9 @@ Hoopoe is designed as a **single-tenant, LAN-only** deployment
   `registration_closed` and the login page hides the "create an account"
   link. A firewall or an authenticating reverse proxy is still the right
   tool for stricter access.
+- A password change or a 2FA disable signs out every other session of
+  that account. Five wrong 2FA codes in a row lock the account's 2FA
+  check for 15 minutes, independent of the client address.
 - Per-client rate limits (login, 2FA, registration) key on the client IP.
   The compose stack sets `TRUST_PROXY=loopback,uniquelocal` so the backend
   trusts the nginx container's `X-Forwarded-For`, which nginx overwrites

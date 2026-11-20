@@ -386,7 +386,7 @@
       "useTotpCodeLink": "Utiliser un code TOTP",
       "logoutLink": "Se déconnecter et revenir en arrière",
       "invalidCodeError": "Code invalide.",
-      "rateLimitedError": "Trop de tentatives. Réessayez dans une minute.",
+      "rateLimitedError": "Trop de tentatives. Patientez quelques minutes avant de réessayer.",
       "sessionExpiredError": "Session expirée. Veuillez vous reconnecter."
     }
   },

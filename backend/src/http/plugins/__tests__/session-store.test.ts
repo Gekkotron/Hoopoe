@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
-import { registerSession, rotateSession } from '../session-store.js';
+import { createSessionStore, registerSession, rotateSession } from '../session-store.js';
 
 declare module 'fastify' {
   interface Session { userId?: number }
@@ -120,5 +120,27 @@ describe('session store', () => {
     const res = await app.inject({ method: 'GET', url: '/me', headers: { cookie: cookieHeader } });
     expect(res.json().userId).toBe(1);
     expect(res.headers['set-cookie']).toBeUndefined();
+  });
+
+  it('destroyUserSessions drops every session of that user except the kept one', async () => {
+    const store = createSessionStore();
+    const put = (id: string, userId: number) =>
+      new Promise<void>((r) => store.set(id, { userId } as never, () => r()));
+    const get = (id: string) =>
+      new Promise<unknown>((r) => store.get(id, (_e: unknown, s: unknown) => r(s)));
+    await put('a', 1);
+    await put('b', 1);
+    await put('c', 1);
+    await put('d', 2);
+
+    expect(await store.destroyUserSessions(1, 'a')).toBe(2);
+    expect(await get('a')).toBeDefined();
+    expect(await get('b')).toBeUndefined();
+    expect(await get('c')).toBeUndefined();
+    expect(await get('d')).toBeDefined();
+    // Tombstoned: an in-flight request cannot write a revoked session back.
+    expect(store.isRevoked('b')).toBe(true);
+    await put('b', 1);
+    expect(await get('b')).toBeUndefined();
   });
 });

@@ -24,7 +24,11 @@ n'est joignable depuis aucune autre machine.
 (`AUTH_MODE=session`, le défaut Docker) utilise `@fastify/session` avec un
 cookie signé. À la connexion, l'identifiant de session est régénéré
 (`req.session.regenerate()`) pour prévenir la fixation de session, et
-`/api/auth/logout` détruit la session côté serveur. Le login est limité
+`/api/auth/logout` détruit la session côté serveur. Changer de mot de
+passe ou désactiver la double authentification déconnecte toutes les autres
+sessions du compte ; celle d'où vient le changement reste ouverte. Après
+cinq codes 2FA erronés d'affilée, la vérification 2FA du compte est bloquée
+15 minutes, quel que soit l'appareil ou l'adresse. Le login est limité
 en fréquence par `@fastify/rate-limit` pour ralentir les tentatives de
 force brute sur les mots de passe faibles.
 

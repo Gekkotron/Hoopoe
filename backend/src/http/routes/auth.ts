@@ -6,7 +6,7 @@ import { db } from '../../db/client.js';
 import { users, userTotp } from '../../db/schema.js';
 import { env } from '../../env.js';
 import { LOCAL_USER_ID, LOCAL_PLACEHOLDER_HASH } from '../../domain/auth/localUser.js';
-import { rotateSession } from '../plugins/session-store.js';
+import { revokeOtherSessions, rotateSession } from '../plugins/session-store.js';
 
 const ARGON2_OPTS = {
   algorithm: Algorithm.Argon2id,
@@ -173,6 +173,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           .returning({ id: users.id, username: users.username });
         if (!updated) return reply.code(500).send({ error: 'update failed' });
         if (updates.username) req.session.username = updated.username;
+        if (updates.passwordHash) await revokeOtherSessions(req);
         return { user: updated };
       } catch (err: any) {
         if (err?.code === '23505') return reply.code(409).send({ error: 'username already taken' });
