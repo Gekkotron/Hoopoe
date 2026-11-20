@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import type { JSX } from 'react';
 
 export function AccountFilter(props: {
   accountId: number | null;

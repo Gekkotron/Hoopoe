@@ -3,6 +3,7 @@ import type { Category, TriGroup } from '../../api/types';
 import { formatAmount, formatDate, amountSignClass } from '../../lib/format';
 import { formatCategoryPath } from '../../lib/categories';
 import { sortedCategoryOptions } from './tri-helpers';
+import type { JSX } from 'react';
 
 export function TriGroupRow({
   g,

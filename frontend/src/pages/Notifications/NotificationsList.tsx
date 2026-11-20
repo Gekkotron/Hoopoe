@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { Notification } from '../../../../shared/api-contracts.js';
 import { NotificationRow } from './NotificationRow';
 import { toLocalIso } from '../../lib/dates';
+import type { JSX } from 'react';
 
 // Groups notifications by LOCAL calendar day. createdAt is a UTC timestamp
 // ("…Z"); slicing its 10 leading chars keys by the UTC date instead, which

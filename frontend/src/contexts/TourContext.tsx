@@ -1,13 +1,11 @@
-import {
-  createContext,
+import { createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
-} from 'react';
+  type ReactNode, type JSX } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTips } from './TipsContext';
 import { TOURS, tipIdFor, type AnchorId, type PageId } from '../tips/tours';

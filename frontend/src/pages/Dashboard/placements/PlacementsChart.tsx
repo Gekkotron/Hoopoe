@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type JSX } from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatAmountCompact, formatDateShort } from '../../../lib/format';
 import { computeActiveWindow, buildAxisTicks } from '../../../components/BalanceChart/lib';

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { formatAmount, amountSignClass } from '../../lib/format';
 import { signedAmount } from '../Accounts/valuation-lib';
 import { FxUnmappedWarning } from '../../components/FxUnmappedWarning';
+import type { JSX } from 'react';
 
 export interface PerCurrencyRow {
   currency: string;

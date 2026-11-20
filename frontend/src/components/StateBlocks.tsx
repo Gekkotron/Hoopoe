@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, JSX } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isDemoStubError } from '../api/errorMessage';
 

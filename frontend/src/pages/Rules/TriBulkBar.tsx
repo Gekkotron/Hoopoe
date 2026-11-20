@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { Category } from '../../api/types';
 import { formatCategoryPath } from '../../lib/categories';
 import { sortedCategoryOptions } from './tri-helpers';
+import type { JSX } from 'react';
 
 export function TriBulkBar({
   categories,

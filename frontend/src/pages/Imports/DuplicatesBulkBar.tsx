@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import type { JSX } from 'react';
 
 // Cross-group bulk action bar rendered when selectedIds is non-empty.
 // Extracted out of DuplicatesPanel so the panel stays under max-lines.

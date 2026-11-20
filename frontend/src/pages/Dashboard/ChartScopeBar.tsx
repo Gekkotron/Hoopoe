@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { Account } from '../../api/types';
 import { AccountSelect } from './AccountSelect';
 import { RangePicker, type RangeKey } from '../../components/RangePicker';
+import type { JSX } from 'react';
 
 interface Props {
   value: 'all' | 'available' | number;

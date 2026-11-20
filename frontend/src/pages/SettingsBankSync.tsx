@@ -17,6 +17,7 @@ import {
   type BankSyncStatus,
 } from './SettingsBankSync-lib';
 import { useBankSyncActions } from './useBankSyncActions';
+import type { JSX } from 'react';
 
 export function SettingsBankSync({ accounts }: { accounts: Account[] }): JSX.Element {
   const { t } = useTranslation('settings');

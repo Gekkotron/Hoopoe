@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNotificationPrefs } from '../../lib/notifications/hooks';
 import { useAccounts } from '../../lib/useReferenceData';

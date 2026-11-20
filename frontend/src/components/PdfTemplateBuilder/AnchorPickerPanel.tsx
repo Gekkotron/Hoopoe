@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, type JSX } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import type { PdfImportNeedsTemplate, PdfTextItem } from '../../api/pdf-templates';
 

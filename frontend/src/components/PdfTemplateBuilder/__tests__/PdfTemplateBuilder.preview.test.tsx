@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup, act } from '@testing-library/react';
 import { PdfTemplateBuilder } from '../index';
 import type { PdfImportNeedsTemplate } from '../../../api/pdf-templates';
 import { pinLocale } from '../../../test/i18n';
@@ -166,12 +166,14 @@ describe('PdfTemplateBuilder — preview button', () => {
     fireEvent.click(screen.getByTestId('paint-Débit'));
 
     // Now let the stale request resolve with rows for the OLD zone config.
-    resolvePreview({
-      rows: [{ date: '2026-01-15', amount: '-42.30', rawLabel: 'CB CARREFOUR', memo: null, fitid: null }],
-      skippedRows: [],
+    // act() flushes every state update the settled request triggers, so a
+    // missing stale-guard would render the rows before the assertions run.
+    await act(async () => {
+      resolvePreview({
+        rows: [{ date: '2026-01-15', amount: '-42.30', rawLabel: 'CB CARREFOUR', memo: null, fitid: null }],
+        skippedRows: [],
+      });
     });
-    await Promise.resolve();
-    await Promise.resolve();
 
     // The stale rows must never appear — the panel should stay empty.
     expect(screen.queryByText('CB CARREFOUR')).toBeNull();

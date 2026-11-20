@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { FxRateWire } from './RatesTable';
+import type { JSX } from 'react';
 
 interface SuggestionsStripProps {
   accountCurrencies: string[];

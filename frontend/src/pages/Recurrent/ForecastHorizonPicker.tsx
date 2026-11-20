@@ -1,4 +1,5 @@
 import { HORIZONS, type Horizon } from './forecast-lib';
+import type { JSX } from 'react';
 
 export function ForecastHorizonPicker({
   value,

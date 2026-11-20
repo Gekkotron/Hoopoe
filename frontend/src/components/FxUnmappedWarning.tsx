@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
+import type { JSX } from 'react';
 
 type Props = { unmapped: Array<{ currency: string }>; className?: string };
 

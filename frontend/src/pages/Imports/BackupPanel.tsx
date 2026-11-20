@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, type JSX } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, ApiError } from '../../api/client';

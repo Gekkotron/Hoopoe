@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useRef, type JSX } from 'react';
 import { useTranslation } from 'react-i18next';
 import { DndContext, DragOverlay, closestCenter } from '@dnd-kit/core';
 import type { Category } from '../../api/types';

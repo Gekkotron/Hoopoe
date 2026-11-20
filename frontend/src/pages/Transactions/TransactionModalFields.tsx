@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import type { Account, Category } from '../../api/types';
 import { formatCategoryPath } from '../../lib/categories';
 import { sortCategoriesForPicker } from './lib';
+import type { JSX } from 'react';
 
 interface Props {
   accounts: Account[];

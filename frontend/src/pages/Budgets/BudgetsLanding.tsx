@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import type { JSX } from 'react';
 
 export function BudgetsLanding(): JSX.Element {
   const { t } = useTranslation('budgets');

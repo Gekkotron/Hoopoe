@@ -3,6 +3,7 @@ import { SectionRule } from '../../components/SectionRule';
 import { NumberField } from '../Settings-fields';
 import { useSettingsFlash } from './useSettingsFlash';
 import { SettingsSkeleton, SaveErrorBanner } from './_shared';
+import type { JSX } from 'react';
 
 export function SettingsImport(): JSX.Element {
   const { t } = useTranslation('settings');

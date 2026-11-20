@@ -1,5 +1,6 @@
 import { formatAmount, amountSignClass } from '../../lib/format';
 import { ConsolidatedTotalCard, type ConsolidatedBlock, type PerCurrencyRow } from './ConsolidatedTotalCard';
+import type { JSX } from 'react';
 
 export type { ConsolidatedBlock, PerCurrencyRow };
 

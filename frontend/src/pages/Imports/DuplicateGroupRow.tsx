@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { Account } from '../../api/types';
 import { getAccountName } from '../../lib/accounts';
+import type { JSX } from 'react';
 
 interface DupTx {
   id: number;

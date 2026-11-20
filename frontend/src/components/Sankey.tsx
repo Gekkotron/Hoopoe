@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, type JSX } from 'react';
 import { useTranslation } from 'react-i18next';
 import { layoutSankey, type SankeyModel, type LaidOutNode } from '../pages/Dashboard/sankey';
 import { formatAmount } from '../lib/format';

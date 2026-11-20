@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { BudgetPeriod } from '../../api/types';
+import type { JSX } from 'react';
 
 function shiftMonth(m: string, delta: number): string {
   const [y, mm] = m.split('-').map(Number);

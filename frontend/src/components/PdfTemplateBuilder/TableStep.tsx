@@ -5,6 +5,7 @@ import { ExtractedTextPanel } from './ExtractedTextPanel';
 import { AnchorPickerPanel } from './AnchorPickerPanel';
 import { PAINT_COLOR } from './constants';
 import type { PdfImportNeedsTemplate } from '../../api/pdf-templates.js';
+import type { JSX } from 'react';
 
 interface Props {
   needsTemplate: PdfImportNeedsTemplate;

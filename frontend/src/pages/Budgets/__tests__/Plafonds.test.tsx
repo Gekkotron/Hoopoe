@@ -6,6 +6,7 @@ import { Plafonds } from '../Plafonds';
 import { api } from '../../../api/client';
 import { withTips } from '../../../test/renderWithProviders';
 import { pinLocale } from '../../../test/i18n';
+import type { JSX } from 'react';
 
 // Plafonds renders French strings by default (the app's current UI
 // language). Preload 'budgets' and 'common' for both locales so

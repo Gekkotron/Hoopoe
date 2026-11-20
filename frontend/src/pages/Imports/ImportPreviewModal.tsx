@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type JSX } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import type { ImportPreview, ImportPreviewFuzzyMatch, ImportPreviewRow } from '../../api/imports';

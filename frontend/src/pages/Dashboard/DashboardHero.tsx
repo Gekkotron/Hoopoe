@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { formatAmount, amountSignClass } from '../../lib/format';
 import { signedAmount } from '../Accounts/valuation-lib';
+import type { JSX } from 'react';
 
 interface Currency {
   currency: string;

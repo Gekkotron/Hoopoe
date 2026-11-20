@@ -1,6 +1,7 @@
 import type { Category, BudgetReportRow } from '../../api/types';
 import { BudgetRow } from './BudgetRow';
 import { SuggestionCard } from './SuggestionCard';
+import type { JSX } from 'react';
 
 type LiRef = ((el: HTMLLIElement | null) => void) | undefined;
 

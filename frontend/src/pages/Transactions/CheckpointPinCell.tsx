@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { Account, BalanceCheckpoint, Transaction } from '../../api/types';
 import { formatAmount, formatDate } from '../../lib/format';
+import type { JSX } from 'react';
 
 // The right-most column of the desktop transactions table when a single
 // account is selected: shows the running balance and, on end-of-day rows,
