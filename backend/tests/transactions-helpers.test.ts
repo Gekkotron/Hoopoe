@@ -1,30 +1,27 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { buildAmountRange, isPgError, parseId } from '../src/http/routes/transactions/helpers.js';
+import { buildAmountRange, pgError, parseId } from '../src/http/routes/transactions/helpers.js';
 
-describe('isPgError', () => {
-  it('returns true for objects with a string `code` field (pg-flavored errors)', () => {
-    expect(isPgError({ code: '23505' })).toBe(true);
-    expect(isPgError({ code: '23503', detail: 'fk violation' })).toBe(true);
+describe('pgError', () => {
+  it('returns the error for objects with a string `code` field (pg-flavored errors)', () => {
+    expect(pgError({ code: '23505' })?.code).toBe('23505');
+    expect(pgError({ code: '23503', detail: 'fk violation' })?.code).toBe('23503');
   });
 
-  it('returns false for values that lack a string code', () => {
-    expect(isPgError(null)).toBe(false);
-    expect(isPgError(undefined)).toBe(false);
-    expect(isPgError('boom')).toBe(false);
-    expect(isPgError({})).toBe(false);
-    expect(isPgError({ code: 42 })).toBe(false);  // wrong type
-    expect(isPgError(new Error('x'))).toBe(false); // Error has no code
+  it('returns the driver error from a DrizzleQueryError-style `.cause`', () => {
+    const driver = Object.assign(new Error('violates check'), { code: '23514' });
+    const wrapped = new Error('Failed query: update …', { cause: driver });
+    expect(pgError(wrapped)?.code).toBe('23514');
+    expect(pgError(wrapped)?.message).toBe('violates check');
   });
 
-  it('narrows to `{ code: string }` when true (compile-time check via usage)', () => {
-    const err: unknown = { code: '23505' };
-    if (isPgError(err)) {
-      // If this line compiles, the guard successfully narrowed the type.
-      expect(err.code.length).toBeGreaterThan(0);
-    } else {
-      throw new Error('guard did not narrow');
-    }
+  it('returns undefined for values that lack a string code', () => {
+    expect(pgError(null)).toBeUndefined();
+    expect(pgError(undefined)).toBeUndefined();
+    expect(pgError('boom')).toBeUndefined();
+    expect(pgError({})).toBeUndefined();
+    expect(pgError({ code: 42 })).toBeUndefined();  // wrong type
+    expect(pgError(new Error('x'))).toBeUndefined(); // Error has no code
   });
 });
 

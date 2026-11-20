@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../../../db/client.js';
 import { loans } from '../../../db/schema.js';
 import { userId } from '../../plugins/auth.js';
-import { parseId, isPgError } from '../../../lib/http.js';
+import { parseId, pgError } from '../../../lib/http.js';
 import { buildSchedule, type LoanSummary } from '../../../domain/loans/engine/index.js';
 import { todayIso, toColumns, toRecord, toTerms } from '../../../domain/loans/record.js';
 import { AsOfQuery, LoanBody, type LoanBodyT } from './schemas.js';
@@ -58,7 +58,7 @@ export function registerCrud(app: FastifyInstance): void {
       if (!row) throw new Error('insert returned no row');
       return reply.code(201).send({ loan: toRecord(row), summary: input.summary });
     } catch (err) {
-      if (isPgError(err) && err.code === '23505') return reply.code(409).send(NAME_TAKEN);
+      if (pgError(err)?.code === '23505') return reply.code(409).send(NAME_TAKEN);
       throw err;
     }
   });
@@ -94,7 +94,7 @@ export function registerCrud(app: FastifyInstance): void {
       if (!row) return reply.code(404).send({ error: 'not found' });
       return { loan: toRecord(row), summary: input.summary };
     } catch (err) {
-      if (isPgError(err) && err.code === '23505') return reply.code(409).send(NAME_TAKEN);
+      if (pgError(err)?.code === '23505') return reply.code(409).send(NAME_TAKEN);
       throw err;
     }
   });

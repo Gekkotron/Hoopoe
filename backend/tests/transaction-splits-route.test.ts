@@ -96,7 +96,7 @@ describe.skipIf(!RUN)('transaction_splits DB layer', () => {
         VALUES (${txId}, ${categoryBooksId}, '-40.00'),
                (${txId}, ${categoryElectroId}, '-30.00')
       `),
-    ).rejects.toThrow(/sum mismatch/);
+    ).rejects.toMatchObject({ cause: { message: expect.stringMatching(/sum mismatch/) } });
   });
 
   it('amount-lock trigger rejects UPDATE of parent.amount while splits exist', async () => {
@@ -114,7 +114,7 @@ describe.skipIf(!RUN)('transaction_splits DB layer', () => {
     `);
     await expect(
       db.execute(sql`UPDATE transactions SET amount = '-200.00' WHERE id = ${txId}`),
-    ).rejects.toThrow(/cannot change transaction amount/);
+    ).rejects.toMatchObject({ cause: { message: expect.stringMatching(/cannot change transaction amount/) } });
   });
 
   describe('splits routes', () => {

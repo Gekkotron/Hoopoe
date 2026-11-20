@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isPgError } from '../src/http/routes/accounts/helpers.js';
+import { pgError } from '../src/http/routes/accounts/helpers.js';
 import {
   CreateBody,
   UpdateBody,
@@ -12,19 +12,25 @@ import {
   lockYears,
 } from '../src/http/routes/accounts/schemas.js';
 
-describe('isPgError', () => {
-  it('accepts objects with a string `code` property', () => {
-    expect(isPgError({ code: '23505' })).toBe(true);
-    expect(isPgError({ code: '23505', detail: 'irrelevant' })).toBe(true);
+describe('pgError', () => {
+  it('returns objects with a string `code` property', () => {
+    expect(pgError({ code: '23505' })?.code).toBe('23505');
+    expect(pgError({ code: '23505', detail: 'irrelevant' })?.code).toBe('23505');
   });
 
-  it('rejects null, non-objects, or objects with a non-string code', () => {
-    expect(isPgError(null)).toBe(false);
-    expect(isPgError(undefined)).toBe(false);
-    expect(isPgError('23505')).toBe(false);
-    expect(isPgError(new Error('boom'))).toBe(false);
-    expect(isPgError({})).toBe(false);
-    expect(isPgError({ code: 23505 })).toBe(false);
+  it('unwraps the driver error drizzle puts on `.cause`', () => {
+    const driver = Object.assign(new Error('duplicate key'), { code: '23505' });
+    const wrapped = new Error('Failed query: insert …', { cause: driver });
+    expect(pgError(wrapped)).toBe(driver);
+  });
+
+  it('returns undefined for null, non-objects, or objects with a non-string code', () => {
+    expect(pgError(null)).toBeUndefined();
+    expect(pgError(undefined)).toBeUndefined();
+    expect(pgError('23505')).toBeUndefined();
+    expect(pgError(new Error('boom'))).toBeUndefined();
+    expect(pgError({})).toBeUndefined();
+    expect(pgError({ code: 23505 })).toBeUndefined();
   });
 });
 

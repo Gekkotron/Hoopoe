@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, eq, ne } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import { categories } from '../../db/schema.js';
-import { isPgError, parseId } from '../../lib/http.js';
+import { pgError, parseId } from '../../lib/http.js';
 import { userId } from '../plugins/auth.js';
 
 const kindEnum = z.enum(['expense', 'income', 'neutral']);
@@ -57,7 +57,7 @@ export async function categoriesRoutes(app: FastifyInstance): Promise<void> {
       const [created] = await db.insert(categories).values({ ...payload, userId: uid }).returning();
       return reply.code(201).send({ category: created });
     } catch (err) {
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({ error: 'category name already exists' });
       }
       throw err;
@@ -150,7 +150,7 @@ export async function categoriesRoutes(app: FastifyInstance): Promise<void> {
       if (!updated) return reply.code(404).send({ error: 'not found' });
       return { category: updated };
     } catch (err) {
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({ error: 'category name already exists' });
       }
       throw err;

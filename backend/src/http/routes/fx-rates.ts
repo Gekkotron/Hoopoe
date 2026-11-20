@@ -3,7 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { db } from '../../db/client.js';
 import { fxRates } from '../../db/schema.js';
-import { isPgError, parseId } from '../../lib/http.js';
+import { pgError, parseId } from '../../lib/http.js';
 import { userId } from '../plugins/auth.js';
 
 const CcyCode = z.string().regex(/^[A-Z]{3}$/);
@@ -68,7 +68,7 @@ export async function fxRatesRoutes(app: FastifyInstance): Promise<void> {
         .returning();
       return reply.code(201).send({ rate: shape(row!) });
     } catch (err: unknown) {
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({ error: 'conflict', code: 'DUPLICATE_RATE' });
       }
       throw err;
@@ -92,7 +92,7 @@ export async function fxRatesRoutes(app: FastifyInstance): Promise<void> {
       if (!row) return reply.code(404).send({ error: 'not_found' });
       return { rate: shape(row) };
     } catch (err: unknown) {
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({ error: 'conflict', code: 'DUPLICATE_RATE' });
       }
       throw err;

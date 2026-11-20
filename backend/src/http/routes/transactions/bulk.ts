@@ -6,7 +6,7 @@ import { transactions, transactionSplits } from '../../../db/schema.js';
 import { areCategoriesOwned } from '../../../domain/ownership.js';
 import { userId } from '../../plugins/auth.js';
 import { CategorizeBulkBody } from './schemas.js';
-import { isPgError } from './helpers.js';
+import { pgError } from './helpers.js';
 
 // Batch-delete a set of transactions by id. Applies the same transfer-leg
 // unlink guard as the single-DELETE handler: any mirror leg still owned by
@@ -107,7 +107,7 @@ export function registerBulk(app: FastifyInstance): void {
       });
       return result;
     } catch (err) {
-      if (isPgError(err) && err.code === '23503') {
+      if (pgError(err)?.code === '23503') {
         return reply.code(400).send({ error: 'catégorie inconnue' });
       }
       throw err;

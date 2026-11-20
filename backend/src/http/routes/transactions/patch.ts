@@ -6,7 +6,7 @@ import { normalizeLabel } from '../../../domain/imports/normalize.js';
 import { areCategoriesOwned, isAccountOwned } from '../../../domain/ownership.js';
 import { userId } from '../../plugins/auth.js';
 import { PatchBody } from './schemas.js';
-import { isPgError, parseId } from './helpers.js';
+import { pgError, parseId } from './helpers.js';
 
 // Inline category edit from the UI. Any explicit categoryId set via this
 // endpoint flips category_source to 'manual' — this is the flag the
@@ -82,16 +82,15 @@ export function registerPatch(app: FastifyInstance): void {
       if (!updated) return reply.code(404).send({ error: 'not found' });
       return { transaction: updated };
     } catch (err) {
-      if (isPgError(err) && err.code === '23503') {
+      if (pgError(err)?.code === '23503') {
         return reply.code(400).send({ error: 'compte ou catégorie inconnu' });
       }
       // Pinned to migration 0014's `transactions_amount_lock_when_split_trg`.
       // If a future migration adds another CHECK/trigger on `transactions`
       // that raises SQLSTATE 23514, that trigger's error should not inherit
       // this specific French message — match on the trigger's own text.
-      if (isPgError(err)
-          && err.code === '23514'
-          && (err as { message?: string }).message?.includes('cannot change transaction amount')) {
+      const pg = pgError(err);
+      if (pg?.code === '23514' && pg.message?.includes('cannot change transaction amount')) {
         return reply.code(409).send({
           error: "supprimez d'abord la ventilation avant de modifier le montant",
         });
