@@ -12,6 +12,7 @@ import { markDirty } from './db/snapshotScheduler.js';
 import { HttpError, isPgError } from './lib/http.js';
 import { authPlugin } from './http/plugins/auth.js';
 import { isLoopbackHost } from './http/loopbackHost.js';
+import { LAUNCH_TOKEN_ENV, decideLaunchRequest } from './http/launchToken.js';
 import { onboardingRoutes } from './http/routes/onboarding.js';
 import { authRoutes } from './http/routes/auth.js';
 import { totpRoutes } from './http/routes/auth/totp.js';
@@ -159,6 +160,24 @@ export async function build(opts?: { logger?: boolean }): Promise<FastifyInstanc
       if (!isLoopbackHost(req.headers.host)) {
         return reply.code(403).send({ error: 'forbidden host' });
       }
+    });
+  }
+
+  // Desktop sidecar only: the shell passes a per-launch token and every
+  // request must carry the cookie it earns at /__launch (see launchToken.ts).
+  // Registered before any route/static plugin; unset (LAN server) = no hook.
+  const launchToken = process.env[LAUNCH_TOKEN_ENV];
+  if (launchToken) {
+    app.addHook('onRequest', async (req, reply) => {
+      const decision = decideLaunchRequest(req.method, req.url, req.headers.cookie, launchToken);
+      if (decision.action === 'allow') return;
+      if (decision.action === 'redirect') {
+        return reply
+          .header('Set-Cookie', decision.setCookie)
+          .header('Cache-Control', 'no-store')
+          .redirect(decision.location, 302);
+      }
+      return reply.code(403).send({ error: 'forbidden' });
     });
   }
 

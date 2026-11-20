@@ -111,7 +111,16 @@ fn migrate_legacy_data_dir(data_dir: &Path) -> Result<Option<PathBuf>, (PathBuf,
     Ok(None)
 }
 
-fn spawn_sidecar(app: &tauri::AppHandle) -> (Child, u16) {
+// 32 bytes from the OS CSPRNG, hex-encoded. Shared with the sidecar only
+// through the HOOPOE_LAUNCH_TOKEN env var (never argv, which `ps` shows) and
+// with the WebView through the /__launch URL.
+fn generate_launch_token() -> String {
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes).expect("OS random number generator unavailable");
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+fn spawn_sidecar(app: &tauri::AppHandle) -> (Child, u16, String) {
     let dir = sidecar_dir(app);
     let node_bin = if cfg!(windows) {
         dir.join("node.exe")
@@ -142,10 +151,12 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> (Child, u16) {
     }
     std::fs::create_dir_all(&data_dir).expect("failed to create app data dir");
 
+    let launch_token = generate_launch_token();
     let mut cmd = Command::new(&node_bin);
     cmd.arg(&entry)
         .current_dir(&dir)
         .env("DATA_DIR", &data_dir)
+        .env("HOOPOE_LAUNCH_TOKEN", &launch_token)
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit());
     // node.exe is a console-subsystem binary: without CREATE_NO_WINDOW it
@@ -187,7 +198,7 @@ fn spawn_sidecar(app: &tauri::AppHandle) -> (Child, u16) {
         Ok(Startup::Fatal(msg)) => panic!("sidecar failed to start: {msg}"),
         Err(_) => panic!("sidecar did not report HOOPOE_PORT within 30s"),
     };
-    (child, port)
+    (child, port, launch_token)
 }
 
 // How often the post-boot monitor (see run() below) polls the sidecar's
@@ -271,7 +282,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             let handle = app.handle().clone();
-            let (child, port) = spawn_sidecar(&handle);
+            let (child, port, launch_token) = spawn_sidecar(&handle);
             app.manage(SidecarHandle(Mutex::new(Some(child))));
 
             // spawn_sidecar's reader thread only watches stdout for the
@@ -320,7 +331,7 @@ pub fn run() {
                 }
             });
 
-            let url = format!("http://127.0.0.1:{port}/")
+            let url = format!("http://127.0.0.1:{port}/__launch?token={launch_token}")
                 .parse()
                 .expect("valid loopback url");
             WebviewWindowBuilder::new(&handle, "main", WebviewUrl::External(url))
@@ -369,6 +380,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(&root).unwrap();
         root
+    }
+
+    #[test]
+    fn launch_token_is_64_hex_chars_and_differs_per_call() {
+        let a = generate_launch_token();
+        let b = generate_launch_token();
+        assert_eq!(a.len(), 64);
+        assert!(a.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(a, b);
     }
 
     #[test]

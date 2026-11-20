@@ -102,9 +102,10 @@ triggers a clean Fastify close + `pool.end()` before exit.
 Smoke test:
 
 ```bash
+export HOOPOE_LAUNCH_TOKEN=$(openssl rand -hex 32)
 ./desktop/sidecar/node ./desktop/sidecar/entry.js &
 # … grab the port from stdout, then:
-curl 127.0.0.1:<port>/health   # → {"ok":true,"ts":"…"}
+curl -H "Cookie: hoopoe_launch=$HOOPOE_LAUNCH_TOKEN" 127.0.0.1:<port>/health   # → {"ok":true,"ts":"…"}
 kill %1
 ```
 
@@ -114,6 +115,18 @@ to the current working directory (see `backend/src/dataDir.ts`); Tauri will
 pass the OS-appropriate app-data path. In this mode the backend only
 answers requests whose `Host` is `127.0.0.1`, `localhost` or `[::1]`; the
 LAN/Docker server entry refuses `AUTH_MODE=none`.
+
+Loopback alone does not stop another local process or OS user, so the shell
+also generates a random 32-byte token on every launch (OS CSPRNG via
+`getrandom`) and passes it to the sidecar in `HOOPOE_LAUNCH_TOKEN` (never on
+the command line, where `ps` would show it). The WebView opens
+`/__launch?token=<token>`; the sidecar replies with a session cookie
+(`HttpOnly`, `SameSite=Strict`) and every other request must carry it, or it
+gets 403. Only `/api/mcp` and its sub-routes are exempt: they carry their own
+HMAC envelope auth and the MCP bridge has no cookie jar. The desktop entry
+refuses to boot (`HOOPOE_FATAL=...`) without a token of at least 32
+characters. `cargo tauri dev` generates one like a release build. To run the
+entry by hand, export one first (see the smoke test above).
 
 ## Running the Tauri shell (dev)
 
