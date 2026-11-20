@@ -26,11 +26,13 @@ async function loadPdfjs() {
 
 export async function renderPagesToPng(buf: Buffer): Promise<RenderedPage[]> {
   const pdfjs = await loadPdfjs();
-  const doc = await pdfjs.getDocument({
+  // pdfjs-dist v6 removed `isEvalSupported`: fonts are no longer compiled via
+  // eval/new Function, so there is no code-evaluation path left to disable.
+  const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(buf),
     useSystemFonts: true,
-    isEvalSupported: false,
-  }).promise;
+  });
+  const doc = await loadingTask.promise;
 
   try {
     const out: RenderedPage[] = [];
@@ -40,7 +42,7 @@ export async function renderPagesToPng(buf: Buffer): Promise<RenderedPage[]> {
       const viewport = page.getViewport({ scale: SCALE });
       const canvas = createCanvas(viewport.width, viewport.height);
       const ctx = canvas.getContext('2d');
-      await page.render({ canvasContext: ctx as any, viewport }).promise;
+      await page.render({ canvas: canvas as any, canvasContext: ctx as any, viewport }).promise;
       const pngBuf = await canvas.encode('png');
       out.push({
         pageIndex: i - 1,
@@ -51,6 +53,6 @@ export async function renderPagesToPng(buf: Buffer): Promise<RenderedPage[]> {
     }
     return out;
   } finally {
-    await doc.destroy();
+    await loadingTask.destroy();
   }
 }
