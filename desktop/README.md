@@ -111,7 +111,9 @@ kill %1
 The sidecar pins `DB_DRIVER=pglite`, `AUTH_MODE=none`,
 `PGLITE_PATH=$DATA_DIR/athena.db`, `SERVE_STATIC=true`. `DATA_DIR` defaults
 to the current working directory (see `backend/src/dataDir.ts`); Tauri will
-pass the OS-appropriate app-data path.
+pass the OS-appropriate app-data path. In this mode the backend only
+answers requests whose `Host` is `127.0.0.1`, `localhost` or `[::1]`; the
+LAN/Docker server entry refuses `AUTH_MODE=none`.
 
 ## Running the Tauri shell (dev)
 

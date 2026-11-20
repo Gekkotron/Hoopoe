@@ -4,6 +4,7 @@ import { pool } from '../db/client.js';
 import { runMigrations } from '../db/migrate.js';
 import { build } from '../buildServer.js';
 import { rotateFromPreviousSecret } from './session-secret-migration.js';
+import { assertServerAuthMode } from './serverAuthMode.js';
 
 const shutdown = async (app: FastifyInstance, signal: string) => {
   app.log.info({ signal }, 'shutting down');
@@ -16,6 +17,13 @@ const shutdown = async (app: FastifyInstance, signal: string) => {
     process.exit(1);
   }
 };
+
+try {
+  assertServerAuthMode(env.AUTH_MODE);
+} catch (err) {
+  console.error((err as Error).message);
+  process.exit(1);
+}
 
 const app = await build();
 

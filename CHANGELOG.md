@@ -21,6 +21,12 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
   or set `METRICS_PUBLIC=true` to keep the old open endpoint (ignored when
   a token is set).
 
+- The LAN/Docker server entry now refuses to start with `AUTH_MODE=none`
+  (it listens on all interfaces, which would leave the API open). In
+  desktop mode the backend, including the locked-boot unlock screen, now
+  answers only requests whose `Host` is `127.0.0.1`, `localhost` or `[::1]`,
+  which blocks DNS-rebinding access from web pages.
+
 ## [1.0.0-rc.10] - 2026-10-20
 
 Re-cut of rc.9 — same product. rc.9 was never published: its Release
