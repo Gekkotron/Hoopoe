@@ -10,13 +10,16 @@ export default defineConfig({
     // Serialize files; tests inside a file already order themselves.
     fileParallelism: false,
     setupFiles: ['./tests/setup.ts'],
+    // Vitest 4+ only excludes node_modules and .git by default; keep the
+    // compiled copies of the tests that `npm run build` writes to dist/ out.
+    exclude: ['**/node_modules/**', '**/.git/**', 'dist/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'json-summary'],
       reportsDirectory: './coverage',
-      // Include every source file in the report, even those no test touches,
-      // so the number reflects the whole codebase (not just executed files).
-      all: true,
+      // Vitest 4+ dropped `coverage.all`: files matched by `include` are
+      // always reported, even those no test touches, so the number reflects
+      // the whole codebase (not just executed files).
       include: ['src/**/*.ts'],
       exclude: [
         'src/**/*.d.ts',
