@@ -4,7 +4,7 @@
 # under QEMU. The production stage below stays per-architecture — its
 # `npm install --omit=dev` resolves native prebuilds (argon2, canvas) for
 # the target platform.
-FROM --platform=$BUILDPLATFORM node:22-alpine AS build
+FROM --platform=$BUILDPLATFORM node:26-alpine AS build
 WORKDIR /app
 
 COPY package.json package-lock.json* ./
@@ -27,7 +27,7 @@ COPY vitest.config.ts ./
 COPY tests ./tests
 ENTRYPOINT ["sh", "scripts/docker-test-entrypoint.sh"]
 
-FROM node:22-alpine
+FROM node:26-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 

@@ -4,7 +4,7 @@
 # under QEMU — the emulated npm install + tsc + vite build is what made the
 # first GHCR release run take 90+ minutes. Only the nginx runtime stage
 # below is per-architecture.
-FROM --platform=$BUILDPLATFORM node:22-alpine AS build
+FROM --platform=$BUILDPLATFORM node:26-alpine AS build
 WORKDIR /app
 
 # Build context is the repo root (see docker-compose.yml). Everything the
