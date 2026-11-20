@@ -55,7 +55,7 @@ Remplacez les placeholders :
 - `HOOPOE_API_URL` — l'URL de votre backend Hoopoe (par exemple l'adresse LAN et le port où le frontend Hoopoe est joignable, soit `http://<mini-pc-host>:8000` : nginx relaie `/api/*`, y compris le point d'accès MCP, vers le backend). Ne pas mettre de barre oblique finale. Le port `8001` du backend n'est publié que sur `127.0.0.1`, les autres machines ne peuvent donc pas l'utiliser.
 - `HOOPOE_MCP_USER` — votre nom d'utilisateur de login Hoopoe.
 - `HOOPOE_MCP_TOKEN` — le jeton généré à l'étape 1.
-- `HOOPOE_STATEMENTS_DIR` *(optionnel)* — un dossier contenant vos PDF de relevés. Quand il est défini, `reconcile_statement` résout un **nom de fichier nu** (par exemple `avril.pdf`) contre ce dossier, ce qui vous évite de taper un chemin absolu complet. Un `~` initial est étendu, et si un fichier n'est pas trouvé, l'erreur liste les `.pdf` réellement présents dans le dossier.
+- `HOOPOE_STATEMENTS_DIR` *(optionnel)* — un dossier contenant vos PDF de relevés. Quand il est défini, `reconcile_statement` résout un **nom de fichier nu** (par exemple `avril.pdf`) contre ce dossier, ce qui vous évite de taper un chemin absolu complet. Un `~` initial est étendu, et si un fichier n'est pas trouvé, l'erreur liste les `.pdf` réellement présents dans le dossier. C'est aussi une frontière : une fois défini, l'outil ne lit que les PDF situés dans ce dossier (les chemins absolus, `../` et liens symboliques qui mènent ailleurs sont refusés), si bien qu'un document lu par le modèle ne peut pas l'amener à envoyer d'autres fichiers. Il est recommandé de le définir.
 
 Les trois premiers sont requis ; le serveur refuse de démarrer si l'un manque.
 

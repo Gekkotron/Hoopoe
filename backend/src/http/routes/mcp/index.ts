@@ -20,7 +20,33 @@ const Inner = z.object({
 });
 const SKEW_MS = 120_000;
 
+// Every authentication failure gets the same body: telling "unknown user /
+// MCP off" apart from "bad key" or "stale" let anyone list which usernames
+// have MCP enabled.
+const AUTH_FAILED = { error: 'authentication failed' } as const;
+
+// Envelopes already accepted, keyed `user|nonce`, kept for the whole window
+// in which their timestamp would still pass (±SKEW_MS). A captured request
+// replayed inside that window is refused. In memory: one process, and a
+// restart only re-opens a window that closes within SKEW_MS anyway.
+// Recorded only after decryption succeeds, so unauthenticated callers
+// cannot fill it.
+function createReplayGuard(ttlMs: number) {
+  const seen = new Map<string, number>(); // key -> expiry
+  return (key: string, now = Date.now()): boolean => {
+    for (const [k, exp] of seen) {
+      if (exp > now) break; // insertion order ~ expiry order
+      seen.delete(k);
+    }
+    if (seen.has(key)) return false;
+    seen.set(key, now + ttlMs);
+    return true;
+  };
+}
+
 export async function mcpRpcRoutes(app: FastifyInstance): Promise<void> {
+  const firstUse = createReplayGuard(2 * SKEW_MS);
+
   // Public route — it performs its own crypto auth. Dedicated rate limit.
   app.post('/api/mcp/rpc', { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } }, async (req, reply) => {
     const env0 = Envelope.safeParse(req.body);
@@ -29,7 +55,7 @@ export async function mcpRpcRoutes(app: FastifyInstance): Promise<void> {
 
     const mcp = await getMcpByUsername(user);
     if (!mcp || !mcp.enabled || !mcp.keyWrapped) {
-      return reply.code(401).send({ error: 'mcp access unavailable' });
+      return reply.code(401).send(AUTH_FAILED);
     }
 
     let key: Buffer;
@@ -42,11 +68,14 @@ export async function mcpRpcRoutes(app: FastifyInstance): Promise<void> {
       inner = parsed.data;
     } catch {
       // Tag failure / wrong key / malformed ciphertext — do not distinguish.
-      return reply.code(401).send({ error: 'authentication failed' });
+      return reply.code(401).send(AUTH_FAILED);
     }
 
     if (Math.abs(Date.now() - inner.ts) > SKEW_MS) {
-      return reply.code(401).send({ error: 'stale request' });
+      return reply.code(401).send(AUTH_FAILED);
+    }
+    if (!firstUse(`${user}|${nonce}`)) {
+      return reply.code(401).send(AUTH_FAILED);
     }
 
     // From here, respond ENCRYPTED — including operation-level errors.

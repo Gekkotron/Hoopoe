@@ -26,6 +26,10 @@ vi.mock('node:fs', () => {
       return { size: files[p].length, isFile: () => true };
     },
     readFileSync: (p: string) => files[p],
+    realpathSync: (p: string) => {
+      if (p in files || p in dirs) return p;
+      const e: any = new Error('ENOENT'); e.code = 'ENOENT'; throw e;
+    },
     readdirSync: (p: string) => { if (!(p in dirs)) { const e: any = new Error('ENOENT'); e.code = 'ENOENT'; throw e; } return dirs[p]; },
   };
 });
