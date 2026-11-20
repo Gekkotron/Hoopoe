@@ -12,6 +12,14 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
 
 ## [Unreleased]
 
+### Added
+- **MCP read-only scope.** MCP tokens can now be limited to read access.
+  New users default to read-only: `create_transaction`,
+  `update_transaction` and `delete_transaction` are refused (403, enforced
+  by the backend) until **Allow changes** is ticked in Settings → MCP.
+  Existing MCP users keep write access (migration 0051 backfills them).
+  The switch never rotates or revokes the token.
+
 ### Security
 - **The Discord webhook URL and the CallMeBot API key are now encrypted at
   rest and never returned.** They were stored in plaintext in the settings
@@ -35,6 +43,9 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
   desktop mode the backend, including the locked-boot unlock screen, now
   answers only requests whose `Host` is `127.0.0.1`, `localhost` or `[::1]`,
   which blocks DNS-rebinding access from web pages.
+
+- An MCP token no longer implies write access to every transaction by
+  default (see the read-only scope above).
 
 ## [1.0.0-rc.10] - 2026-10-20
 

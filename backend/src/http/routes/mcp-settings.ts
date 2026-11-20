@@ -3,10 +3,14 @@ import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
 import { env } from '../../env.js';
 import { userId } from '../plugins/auth.js';
-import { getMcpState, setMcpEnabled, setMcpWrappedKey } from '../../domain/mcp/store.js';
+import { getMcpState, setMcpEnabled, setMcpReadOnly, setMcpWrappedKey } from '../../domain/mcp/store.js';
 import { masterKey, deriveContentKey, wrapKey } from '../../domain/mcp/crypto.js';
 
-const EnableBody = z.object({ enabled: z.boolean() });
+// Either field may be sent alone; changing one never touches the other nor
+// the token (no rotation, no revocation).
+const SettingsBody = z
+  .object({ enabled: z.boolean().optional(), readOnly: z.boolean().optional() })
+  .refine((b) => b.enabled !== undefined || b.readOnly !== undefined, { message: 'enabled or readOnly required' });
 
 export async function mcpSettingsRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', app.requireAuth);
@@ -16,9 +20,10 @@ export async function mcpSettingsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.put('/api/settings/mcp', async (req, reply) => {
-    const parsed = EnableBody.safeParse(req.body);
+    const parsed = SettingsBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: 'invalid input', issues: parsed.error.issues });
-    await setMcpEnabled(userId(req), parsed.data.enabled);
+    if (parsed.data.enabled !== undefined) await setMcpEnabled(userId(req), parsed.data.enabled);
+    if (parsed.data.readOnly !== undefined) await setMcpReadOnly(userId(req), parsed.data.readOnly);
     return await getMcpState(userId(req));
   });
 

@@ -53,6 +53,8 @@
       "sectionLabel": "MCP access",
       "description": "Lets a local assistant (Ollama via an MCP client) manage your transactions. Content is encrypted with the token — nothing travels in the clear.",
       "enableLabel": "Enable MCP access",
+      "allowChangesLabel": "Allow changes",
+      "allowChangesHint": "Off = read-only: the assistant can look but not create, edit or delete transactions.",
       "generateButton": "Generate a token",
       "regenerateButton": "Regenerate token",
       "revokeButton": "Revoke",

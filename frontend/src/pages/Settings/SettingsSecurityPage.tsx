@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation, Trans } from 'react-i18next';
-import { getMcpSettings, setMcpEnabled, generateMcpToken, revokeMcpToken } from '../../api/mcp';
+import { getMcpSettings, setMcpEnabled, setMcpReadOnly, generateMcpToken, revokeMcpToken } from '../../api/mcp';
 import { SectionRule } from '../../components/SectionRule';
 import { SettingsSecurity } from '../SettingsSecurity';
 import { SettingsLock } from '../SettingsLock';
@@ -16,8 +16,12 @@ function McpAccessSection(): JSX.Element {
   const [freshToken, setFreshToken] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const mcpQ = useQuery({ queryKey: ['mcp-settings'], queryFn: getMcpSettings });
-  const mcp = mcpQ.data ?? { enabled: false, hasToken: false };
+  const mcp = mcpQ.data ?? { enabled: false, hasToken: false, readOnly: true };
 
+  const toggleAllowChanges = async (allow: boolean) => {
+    await setMcpReadOnly(!allow);
+    qc.invalidateQueries({ queryKey: ['mcp-settings'] });
+  };
   const toggleMcp = async (enabled: boolean) => {
     await setMcpEnabled(enabled);
     qc.invalidateQueries({ queryKey: ['mcp-settings'] });
@@ -60,6 +64,18 @@ function McpAccessSection(): JSX.Element {
         />
         {t('settings.mcp.enableLabel')}
       </label>
+      <div className="flex flex-col gap-1">
+        <label className="flex items-center gap-2 text-sm text-ink-200">
+          <input
+            data-testid="mcp-allow-changes"
+            type="checkbox"
+            checked={!mcp.readOnly}
+            onChange={(e) => void toggleAllowChanges(e.target.checked)}
+          />
+          {t('settings.mcp.allowChangesLabel')}
+        </label>
+        <p className="text-xs text-ink-400">{t('settings.mcp.allowChangesHint')}</p>
+      </div>
       <div className="flex items-center gap-3">
         <button
           data-testid="mcp-generate"

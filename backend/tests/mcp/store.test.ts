@@ -20,24 +20,24 @@ describe.skipIf(!RUN)('mcp store', () => {
 
   it('defaults: no row → disabled, no token', async () => {
     const s = await import('../../src/domain/mcp/store.js');
-    expect(await s.getMcpState(uid)).toEqual({ enabled: false, hasToken: false });
-    expect(await s.getMcpByUsername('storeuser')).toEqual({ userId: uid, enabled: false, keyWrapped: null });
+    expect(await s.getMcpState(uid)).toEqual({ enabled: false, hasToken: false, readOnly: true });
+    expect(await s.getMcpByUsername('storeuser')).toEqual({ userId: uid, enabled: false, keyWrapped: null, readOnly: true });
   });
 
   it('setMcpEnabled + setMcpWrappedKey upsert and read back', async () => {
     const s = await import('../../src/domain/mcp/store.js');
     await s.setMcpEnabled(uid, true);
     await s.setMcpWrappedKey(uid, 'WRAPPED');
-    expect(await s.getMcpState(uid)).toEqual({ enabled: true, hasToken: true });
+    expect(await s.getMcpState(uid)).toEqual({ enabled: true, hasToken: true, readOnly: true });
     const byName = await s.getMcpByUsername('storeuser');
-    expect(byName).toEqual({ userId: uid, enabled: true, keyWrapped: 'WRAPPED' });
+    expect(byName).toEqual({ userId: uid, enabled: true, keyWrapped: 'WRAPPED', readOnly: true });
   });
 
   it('setMcpWrappedKey(null) revokes', async () => {
     const s = await import('../../src/domain/mcp/store.js');
     await s.setMcpWrappedKey(uid, 'WRAPPED');
     await s.setMcpWrappedKey(uid, null);
-    expect(await s.getMcpState(uid)).toEqual({ enabled: false, hasToken: false });
+    expect(await s.getMcpState(uid)).toEqual({ enabled: false, hasToken: false, readOnly: true });
   });
 
   it('getMcpByUsername returns null for unknown user', async () => {

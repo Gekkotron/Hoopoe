@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import { userSettings, users } from '../../db/schema.js';
 
-async function upsertMcp(uid: number, patch: { mcpEnabled?: boolean; mcpKeyWrapped?: string | null }): Promise<void> {
+async function upsertMcp(uid: number, patch: { mcpEnabled?: boolean; mcpKeyWrapped?: string | null; mcpReadOnly?: boolean }): Promise<void> {
   await db
     .insert(userSettings)
     .values({ userId: uid, ...patch })
@@ -12,16 +12,20 @@ async function upsertMcp(uid: number, patch: { mcpEnabled?: boolean; mcpKeyWrapp
     });
 }
 
-export async function getMcpState(uid: number): Promise<{ enabled: boolean; hasToken: boolean }> {
+export async function getMcpState(uid: number): Promise<{ enabled: boolean; hasToken: boolean; readOnly: boolean }> {
   const [row] = await db
-    .select({ enabled: userSettings.mcpEnabled, keyWrapped: userSettings.mcpKeyWrapped })
+    .select({ enabled: userSettings.mcpEnabled, keyWrapped: userSettings.mcpKeyWrapped, readOnly: userSettings.mcpReadOnly })
     .from(userSettings)
     .where(eq(userSettings.userId, uid));
-  return { enabled: row?.enabled ?? false, hasToken: !!row?.keyWrapped };
+  return { enabled: row?.enabled ?? false, hasToken: !!row?.keyWrapped, readOnly: row?.readOnly ?? true };
 }
 
 export async function setMcpEnabled(uid: number, enabled: boolean): Promise<void> {
   await upsertMcp(uid, { mcpEnabled: enabled });
+}
+
+export async function setMcpReadOnly(uid: number, readOnly: boolean): Promise<void> {
+  await upsertMcp(uid, { mcpReadOnly: readOnly });
 }
 
 export async function setMcpWrappedKey(uid: number, wrapped: string | null): Promise<void> {
@@ -30,16 +34,17 @@ export async function setMcpWrappedKey(uid: number, wrapped: string | null): Pro
 
 export async function getMcpByUsername(
   username: string,
-): Promise<{ userId: number; enabled: boolean; keyWrapped: string | null } | null> {
+): Promise<{ userId: number; enabled: boolean; keyWrapped: string | null; readOnly: boolean } | null> {
   const [row] = await db
     .select({
       userId: users.id,
       enabled: userSettings.mcpEnabled,
       keyWrapped: userSettings.mcpKeyWrapped,
+      readOnly: userSettings.mcpReadOnly,
     })
     .from(users)
     .leftJoin(userSettings, eq(userSettings.userId, users.id))
     .where(eq(users.username, username));
   if (!row) return null;
-  return { userId: row.userId, enabled: row.enabled ?? false, keyWrapped: row.keyWrapped ?? null };
+  return { userId: row.userId, enabled: row.enabled ?? false, keyWrapped: row.keyWrapped ?? null, readOnly: row.readOnly ?? true };
 }

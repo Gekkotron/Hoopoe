@@ -6,6 +6,8 @@ type FetchImpl = typeof fetch;
 function mapError(status: number, body: unknown): string {
   const apiMsg = (body && typeof body === 'object' && 'error' in body)
     ? String((body as { error: unknown }).error) : '';
+  // The backend refuses writes on a read-only token with an explanatory 403.
+  if (status === 403 && apiMsg.startsWith('read-only MCP token')) return apiMsg;
   if (status === 401 || status === 403) return 'MCP access is disabled or the token is invalid (check Réglages → MCP)';
   if (status === 404) return apiMsg || 'transaction not found';
   if (status === 400 || status === 409) return apiMsg || `request rejected (${status})`;

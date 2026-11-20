@@ -92,6 +92,11 @@ export async function mcpRpcRoutes(app: FastifyInstance): Promise<void> {
       throw err;
     }
 
+    // Enforced here, not in the bridge: the bridge is untrusted.
+    if (mcp.readOnly && built.write) {
+      return respond(403, { error: `read-only MCP token: ${inner.op} is not allowed` });
+    }
+
     const sub = await app.inject({
       method: built.method,
       url: built.url,
