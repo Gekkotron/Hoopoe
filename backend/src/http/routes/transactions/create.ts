@@ -9,7 +9,7 @@ import { afterTransactionInserted, computeCurrentBalance } from '../../../domain
 import { areCategoriesOwned } from '../../../domain/ownership.js';
 import { userId } from '../../plugins/auth.js';
 import { CreateBody } from './schemas.js';
-import { isPgError } from './helpers.js';
+import { pgError } from './helpers.js';
 
 // Manual transaction creation. Same dedup discipline as the importer — the
 // UNIQUE(account_id, dedup_key) constraint rejects exact duplicates at the
@@ -110,10 +110,10 @@ export function registerCreate(app: FastifyInstance): void {
       });
       return reply.code(201).send({ transaction: row });
     } catch (err) {
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send(DUPLICATE_ERROR);
       }
-      if (isPgError(err) && err.code === '23503') {
+      if (pgError(err)?.code === '23503') {
         return reply.code(400).send({ error: 'compte ou catégorie inconnu' });
       }
       throw err;

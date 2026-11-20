@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import cookie from '@fastify/cookie';
-import { createSessionStore, registerSession, rotateSession } from '../session-store.js';
+import { createSessionStore, registerSession, revokeOtherSessions, rotateSession } from '../session-store.js';
 
 declare module 'fastify' {
   interface Session { userId?: number }
@@ -23,6 +23,7 @@ async function buildApp(gate: Promise<void>): Promise<FastifyInstance> {
     req.session.userId = 1;
     return { ok: true };
   });
+  app.post('/revoke-others', async (req) => ({ revoked: await revokeOtherSessions(req) }));
   app.get('/me', async (req) => ({ userId: req.session.userId ?? null }));
   return app;
 }
@@ -120,6 +121,23 @@ describe('session store', () => {
     const res = await app.inject({ method: 'GET', url: '/me', headers: { cookie: cookieHeader } });
     expect(res.json().userId).toBe(1);
     expect(res.headers['set-cookie']).toBeUndefined();
+  });
+
+  // A rotated session keeps its store key but gets a new generation id
+  // (@fastify/session >= 11.1.2). Revocation must key on the store id, or
+  // a password change right after login signs the user out of the current
+  // session too.
+  it('revokeOtherSessions keeps the current, rotated session', async () => {
+    app = await buildApp(Promise.resolve());
+    const other = sidCookie(await app.inject({ method: 'POST', url: '/rotate' }));
+    const current = sidCookie(await app.inject({ method: 'POST', url: '/rotate' }));
+
+    const res = await app.inject({ method: 'POST', url: '/revoke-others', headers: { cookie: current } });
+    expect(res.json().revoked).toBe(1);
+    const me = await app.inject({ method: 'GET', url: '/me', headers: { cookie: current } });
+    expect(me.json().userId).toBe(1);
+    const gone = await app.inject({ method: 'GET', url: '/me', headers: { cookie: other } });
+    expect(gone.json().userId).toBeNull();
   });
 
   it('destroyUserSessions drops every session of that user except the kept one', async () => {

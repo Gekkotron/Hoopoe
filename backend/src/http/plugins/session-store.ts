@@ -20,10 +20,17 @@ type Callback = (err?: unknown) => void;
 // fires a burst of slow report queries on load, so this was easy to hit
 // while rolling was on; the tombstone keeps it closed for modifying requests.
 //
-// destroy() leaves a tombstone; a later set() for a tombstoned id is a
-// no-op. Ids are random and never reused, so a tombstone can only ever
-// block a stale write. Tombstones are dropped once older than `ttlMs`
-// (the cookie lifetime), after which the stale cookie is dead anyway.
+// destroy() leaves a tombstone; a later set() or compareAndSet() for a
+// tombstoned id is a no-op. Ids are the store keys (`sessionStoreId`), which
+// are random and never reused, so a tombstone can only ever block a stale
+// write. Tombstones are dropped once older than `ttlMs` (the cookie
+// lifetime), after which the stale cookie is dead anyway.
+//
+// Since @fastify/session 11.1.2 a session has two ids: `sessionStoreId`, the
+// store key, which stays the same across regenerate(), and `sessionId`, the
+// generation, which regenerate() replaces. The cookie carries both, and a
+// cookie whose generation no longer matches the stored one is rejected.
+// Everything here that talks to the store must use `sessionStoreId`.
 export function createSessionStore(ttlMs = 30 * 24 * 60 * 60 * 1000): RevocationAwareStore {
   // Our own Map so destroyUserSessions() can find a user's sessions;
   // MemoryStore has no enumeration API.
@@ -43,6 +50,12 @@ export function createSessionStore(ttlMs = 30 * 24 * 60 * 60 * 1000): Revocation
   store.set = (id: string, session: unknown, cb: Callback) => {
     if (tombstones.has(id)) return cb();
     inner.set(id, session as never, cb);
+  };
+  // Saves of an already-stored session go through compareAndSet, which
+  // writes the map directly and would skip the set() guard above.
+  store.compareAndSet = (id: string, expectedGeneration: string, session: unknown, cb: Callback) => {
+    if (tombstones.has(id)) return cb();
+    inner.compareAndSet(id, expectedGeneration, session as never, cb);
   };
   store.destroy = (id: string, cb: Callback) => {
     const now = Date.now();
@@ -72,19 +85,27 @@ export async function revokeOtherSessions(req: FastifyRequest): Promise<number> 
   const store = req.sessionStore as Partial<RevocationAwareStore> | undefined;
   const uid = req.session?.userId;
   if (!uid || typeof store?.destroyUserSessions !== 'function') return 0;
-  return store.destroyUserSessions(uid, req.session.sessionId);
+  return store.destroyUserSessions(uid, req.session.sessionStoreId);
 }
 
-// Session-id rotation that actually retires the old id. @fastify/session's
-// regenerate() only mints a new session — the old one stays valid in the
-// store, so a stolen pre-login (or pre-2FA, totpPending) cookie would keep
-// working after rotation. Destroying it here also tombstones it, so an
-// in-flight request still holding the old cookie can't write it back.
+// Session-id rotation that actually retires the old cookie, so a stolen
+// pre-login (or pre-2FA, totpPending) cookie stops working after rotation.
+//
+// @fastify/session >= 11.1.2: regenerate() keeps the store key and writes a
+// new generation over it (compare-and-set), so the old cookie, which names
+// the old generation, is rejected from then on, and an in-flight request
+// still holding the old session can no longer save it back. The store entry
+// is now the *new* session: destroying the old id here, as older versions
+// needed, would log the user straight back out.
+//
+// Older versions minted a new store key and left the old entry valid, so
+// it is still destroyed (and tombstoned) if the key did change.
 export async function rotateSession(req: FastifyRequest): Promise<void> {
-  const oldId = req.session.sessionId;
+  const oldStoreId = req.session.sessionStoreId;
   await req.session.regenerate();
+  if (req.session.sessionStoreId === oldStoreId) return;
   await new Promise<void>((resolve, reject) => {
-    req.sessionStore.destroy(oldId, (err?: unknown) => (err ? reject(err) : resolve()));
+    req.sessionStore.destroy(oldStoreId, (err?: unknown) => (err ? reject(err) : resolve()));
   });
 }
 
@@ -113,7 +134,7 @@ export function guardSessionCookie(
     const header = reply.getHeader('set-cookie');
     if (header === undefined) return payload;
     const cookies = Array.isArray(header) ? header.map(String) : [String(header)];
-    const staleSession = !!req.session && store.isRevoked(req.session.sessionId);
+    const staleSession = !!req.session && store.isRevoked(req.session.sessionStoreId);
     const kept = cookies.filter((c) => {
       if (!c.startsWith(prefix)) return true;
       if (c.startsWith(`${prefix};`)) return false; // clear for an unknown id

@@ -216,4 +216,28 @@ describe('runUnlockServer', () => {
     });
     await unlocked;
   });
+
+  it('with a launch token: refuses cookie-less requests and serves the page after the exchange', async () => {
+    const token = 'c'.repeat(64);
+    const { port, unlocked } = await runUnlockServer({ dir, launchToken: token });
+    const base = `http://127.0.0.1:${port}`;
+
+    expect((await fetch(`${base}/health`)).status).toBe(403);
+    expect((await fetch(`${base}/__launch?token=wrong`)).status).toBe(403);
+
+    const launch = await fetch(`${base}/__launch?token=${token}`, { redirect: 'manual' });
+    expect(launch.status).toBe(302);
+    expect(launch.headers.get('location')).toBe('/');
+    const cookie = (launch.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
+    expect(cookie).toBe(`hoopoe_launch=${token}`);
+
+    expect((await fetch(`${base}/health`, { headers: { Cookie: cookie } })).status).toBe(200);
+
+    await fetch(`${base}/api/unlock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      body: JSON.stringify({ password: PASSWORD }),
+    });
+    await unlocked;
+  });
 });

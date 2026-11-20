@@ -5,7 +5,7 @@ import { db } from '../../db/client.js';
 import { ruleSplits, rules, transactions } from '../../db/schema.js';
 import { compileRule, isSafeRulePattern, type Rule } from '../../domain/rules/matcher.js';
 import { recategorizeAll } from '../../domain/rules/recategorize.js';
-import { isPgError, parseId } from '../../lib/http.js';
+import { pgError, parseId } from '../../lib/http.js';
 import { areCategoriesOwned } from '../../domain/ownership.js';
 import { userId } from '../plugins/auth.js';
 
@@ -145,7 +145,7 @@ export async function rulesRoutes(app: FastifyInstance): Promise<void> {
         rule: { ...created, splits: splits ?? [] },
       });
     } catch (err) {
-      if (isPgError(err) && err.code === '23503') {
+      if (pgError(err)?.code === '23503') {
         return reply.code(400).send({ error: 'unknown categoryId' });
       }
       throw err;

@@ -4,7 +4,7 @@ import { db } from '../../../db/client.js';
 import { accounts } from '../../../db/schema.js';
 import { userId } from '../../plugins/auth.js';
 import { CreateBody, UpdateBody } from './schemas.js';
-import { isPgError, parseId } from './helpers.js';
+import { pgError, parseId } from './helpers.js';
 
 // True iff the account has at least one mapped bank_connection_accounts
 // row with a non-empty IBAN — in that case the synced IBAN is the
@@ -36,7 +36,7 @@ export function registerCrud(app: FastifyInstance): void {
       return reply.code(201).send({ account: created });
     } catch (err) {
       // unique_violation on (user_id, name)
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({ error: 'account name already exists' });
       }
       throw err;
@@ -81,7 +81,7 @@ export function registerCrud(app: FastifyInstance): void {
       if (!updated) return reply.code(404).send({ error: 'not found' });
       return { account: updated };
     } catch (err) {
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({ error: 'account name already exists' });
       }
       throw err;
@@ -104,7 +104,8 @@ export function registerCrud(app: FastifyInstance): void {
       // pglite emits 23001 (restrict_violation) for this same ON DELETE
       // RESTRICT case where real Postgres emits 23503 (foreign_key_violation);
       // both mean "account still referenced" here, so map both to 409.
-      if (isPgError(err) && (err.code === '23503' || err.code === '23001')) {
+      const pgCode = pgError(err)?.code;
+      if (pgCode === '23503' || pgCode === '23001') {
         return reply
           .code(409)
           .send({ error: 'account has transactions; remove them first' });

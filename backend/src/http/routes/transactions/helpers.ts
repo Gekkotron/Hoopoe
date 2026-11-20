@@ -2,7 +2,7 @@ import { inArray, sql } from 'drizzle-orm';
 import { db } from '../../../db/client.js';
 import { transactionAttachments, transactionSplits } from '../../../db/schema.js';
 
-export { isPgError, parseId } from '../../../lib/http.js';
+export { pgError, parseId } from '../../../lib/http.js';
 
 // Amount-search widening: "19" → [19.00, 19.99] (finds 19.72),
 // "55.5" → [55.50, 55.59] (finds 55.57), "19.72" → [19.72, 19.72] (exact).

@@ -4,7 +4,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '../../../db/client.js';
 import { categories, transactions, transactionSplits } from '../../../db/schema.js';
 import { userId } from '../../plugins/auth.js';
-import { isPgError, parseId } from './helpers.js';
+import { pgError, parseId } from './helpers.js';
 
 const SplitInput = z.object({
   categoryId: z.number().int().positive(),
@@ -133,7 +133,7 @@ export function registerSplitsRoutes(app: FastifyInstance): void {
       });
       return { splits: inserted.map(serialize) };
     } catch (err) {
-      if (isPgError(err) && err.code === '23514') {
+      if (pgError(err)?.code === '23514') {
         return reply.code(400).send({
           error: 'la somme des ventilations ne correspond pas au montant de la transaction',
         });

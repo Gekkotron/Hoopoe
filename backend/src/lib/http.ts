@@ -16,16 +16,24 @@ export function parseId(req: FastifyRequest, reply: FastifyReply): number | null
   return r.data.id;
 }
 
-// True when `err` is a Postgres driver error with a `.code` string set. Used
-// to distinguish 23505 (unique_violation) and 23503 (foreign_key_violation)
-// from generic exceptions without pulling the whole `pg` type surface.
-export function isPgError(err: unknown): err is { code: string } {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    typeof (err as { code: unknown }).code === 'string'
-  );
+// The Postgres driver error behind `err` (anything with a string `.code`),
+// or undefined. Used to tell 23505 (unique_violation), 23503
+// (foreign_key_violation), … apart from generic exceptions without pulling
+// the whole `pg` type surface.
+//
+// drizzle-orm >= 0.44 wraps every failed query in a DrizzleQueryError
+// ("Failed query: …", no `code`) and keeps the driver error on `.cause`, so
+// the SQLSTATE and the server's message live one level down. Walk the
+// (short) cause chain instead of reading `err.code` directly.
+export function pgError(err: unknown): { code: string; message?: string } | undefined {
+  let cur: unknown = err;
+  for (let depth = 0; depth < 4 && typeof cur === 'object' && cur !== null; depth++) {
+    if (typeof (cur as { code?: unknown }).code === 'string') {
+      return cur as { code: string; message?: string };
+    }
+    cur = (cur as { cause?: unknown }).cause;
+  }
+  return undefined;
 }
 
 // Structured HTTP-status-carrying error. Route handlers can `throw new
