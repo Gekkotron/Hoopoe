@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path';
 import { z } from 'zod';
 import { isHopCount, parseTrustProxy } from './lib/trustProxy.js';
 
@@ -93,6 +94,17 @@ export const Env = z
     // configured (Sauvegarde → Sauvegarde distante). On by default; set to
     // 0/false to only back up on demand via the run-now button.
     BACKUP_AUTO: boolish.default(true),
+    // Folder backup destinations must resolve (realpath) inside this
+    // directory. Unset: `<DATA_DIR>/backups` on the server/Docker build, the
+    // home directory plus the external-disk mount points on the desktop build
+    // (AUTH_MODE=none), see domain/backup/folder-root.ts.
+    BACKUP_FOLDER_ROOT: z.preprocess(
+      emptyAsUndefined,
+      z
+        .string()
+        .refine((p) => isAbsolute(p), { message: 'BACKUP_FOLDER_ROOT must be an absolute path' })
+        .optional(),
+    ),
     // Built-in mDNS/Bonjour responder: when on, the backend answers
     // multicast A-queries for `<HOOPOE_MDNS_HOSTNAME>.local` with the host's
     // non-loopback IPv4(s), so other devices on the LAN can reach the app

@@ -9,8 +9,11 @@ import { env } from '../../../env.js';
 import { userId } from '../../plugins/auth.js';
 import { mergeSettings } from '../../../domain/settings/schema.js';
 import { nextScheduledOccurrence } from '../../../domain/imports/bank-sync-core.js';
-import { BackupProviderError, type BackupProvider } from '../../../domain/backup/providers.js';
+import type { BackupProvider } from '../../../domain/backup/providers.js';
+import { DestinationNotAllowedError, publicErrorCategory } from '../../../domain/backup/errors.js';
+import { hasControlChars } from '../../../domain/backup/net-guard.js';
 import {
+  assertDestinationAllowed,
   BackupNotConfiguredError,
   providerFor,
   runBackupNow,
@@ -40,6 +43,10 @@ const shared = {
   enabled: z.boolean().default(true),
 };
 
+// CR/LF/NUL would let a value smuggle extra FTP commands or HTTP header lines.
+const noControlChars = (v: string) => !hasControlChars(v);
+const CTL_MSG = { message: 'must not contain line breaks or NUL' };
+
 const PutBody = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('webdav'),
@@ -47,9 +54,9 @@ const PutBody = z.discriminatedUnion('kind', [
       .string()
       .url()
       .refine((u) => /^https?:\/\//.test(u), { message: 'http(s) URL required' }),
-    username: z.string().trim().min(1),
+    username: z.string().trim().min(1).refine(noControlChars, CTL_MSG),
     password: z.string().min(1).optional(),
-    subdir: z.string().trim().optional(),
+    subdir: z.string().trim().refine(noControlChars, CTL_MSG).optional(),
     ...shared,
   }),
   z.object({
@@ -63,11 +70,12 @@ const PutBody = z.discriminatedUnion('kind', [
       .string()
       .trim()
       .min(1)
-      .refine((h) => !h.includes('://'), { message: 'hostname without a scheme' }),
+      .refine((h) => !h.includes('://'), { message: 'hostname without a scheme' })
+      .refine(noControlChars, CTL_MSG),
     port: z.number().int().min(1).max(65535).default(21),
-    username: z.string().trim().min(1),
-    password: z.string().min(1).optional(),
-    subdir: z.string().trim().optional(),
+    username: z.string().trim().min(1).refine(noControlChars, CTL_MSG),
+    password: z.string().min(1).refine(noControlChars, CTL_MSG).optional(),
+    subdir: z.string().trim().refine(noControlChars, CTL_MSG).optional(),
     ...shared,
   }),
 ]);
@@ -97,6 +105,7 @@ async function statusFor(uid: number, dest: BackupDestinationRecord | null) {
     config: dest.config,
     enabled: dest.enabled,
     lastRunAt: dest.lastRunAt ? dest.lastRunAt.toISOString() : null,
+    // Generic category only (see recordRun); never upstream text.
     lastError: dest.lastError,
     auto,
   };
@@ -163,11 +172,20 @@ export function registerDestinationRoutes(app: FastifyInstance): void {
       lastAttachmentFingerprint: null,
     };
     try {
+      await assertDestinationAllowed(candidate);
+    } catch (err) {
+      if (err instanceof DestinationNotAllowedError) {
+        return reply.code(400).send({ error: 'destination not allowed', detail: err.message });
+      }
+      // Anything else (e.g. DNS failure) is reported by the probe below.
+    }
+    try {
       await probe(providerFor(candidate));
     } catch (err) {
-      const detail =
-        err instanceof BackupProviderError || err instanceof Error ? err.message : String(err);
-      return reply.code(502).send({ error: 'destination test failed', detail });
+      req.log.error({ err }, '[backup] destination probe failed');
+      return reply
+        .code(502)
+        .send({ error: 'destination test failed', detail: publicErrorCategory(err) });
     }
     await setDestination(uid, {
       kind: body.kind,
@@ -191,8 +209,8 @@ export function registerDestinationRoutes(app: FastifyInstance): void {
       if (err instanceof BackupNotConfiguredError) {
         return reply.code(409).send({ error: 'backup destination not configured' });
       }
-      const detail = err instanceof Error ? err.message : String(err);
-      return reply.code(502).send({ error: 'backup failed', detail });
+      req.log.error({ err }, '[backup] run-now failed');
+      return reply.code(502).send({ error: 'backup failed', detail: publicErrorCategory(err) });
     }
   });
 }

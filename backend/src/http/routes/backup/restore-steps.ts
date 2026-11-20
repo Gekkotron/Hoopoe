@@ -1,15 +1,18 @@
 import type { FastifyBaseLogger } from 'fastify';
+import { eq } from 'drizzle-orm';
 import { db } from '../../../db/client.js';
 import {
   accountFilenamePatterns,
   accounts,
   balanceCheckpoints,
+  bankConnectionAccounts,
   categories,
   categoryBudgets,
   ruleSplits,
   rules,
 } from '../../../db/schema.js';
 import type { BackupDump } from './schema.js';
+import type { BankLinkSnapshot } from './wipe.js';
 import {
   normalizeCategoryKind,
   resolveCategoryRef,
@@ -50,6 +53,45 @@ export async function restoreAccounts(
     if (inserted) accountIdByName.set(a.name, inserted.id);
   }
   return accountIdByName;
+}
+
+export type UnlinkedBankAccount = {
+  connectionId: number;
+  bankAccountUid: string;
+  bankAccountName: string | null;
+  iban: string | null;
+  previousAccountName: string | null;
+};
+
+// Points each snapshotted bank_connection_accounts row back at the restored
+// account carrying the same name. Rows whose account name is gone from the
+// dump (or that were unmapped before) stay NULL; the ones that WERE mapped
+// are returned so the response can tell the user which links to redo.
+export async function relinkBankAccounts(
+  tx: Tx,
+  links: BankLinkSnapshot[],
+  accountIdByName: Map<string, number>,
+): Promise<UnlinkedBankAccount[]> {
+  const unlinked: UnlinkedBankAccount[] = [];
+  for (const l of links) {
+    const accountId =
+      l.previousAccountName === null ? undefined : accountIdByName.get(l.previousAccountName);
+    if (accountId !== undefined) {
+      await tx
+        .update(bankConnectionAccounts)
+        .set({ accountId })
+        .where(eq(bankConnectionAccounts.id, l.id));
+    } else if (l.previousAccountName !== null) {
+      unlinked.push({
+        connectionId: l.connectionId,
+        bankAccountUid: l.bankAccountUid,
+        bankAccountName: l.name,
+        iban: l.iban,
+        previousAccountName: l.previousAccountName,
+      });
+    }
+  }
+  return unlinked;
 }
 
 // Categories: keyed by path so same-name-under-different-parents doesn't collide.

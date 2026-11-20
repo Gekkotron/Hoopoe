@@ -1,10 +1,12 @@
 // requires Postgres or PGlite — run with RUN_DB_TESTS=1 (DB_DRIVER=pglite).
 import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { eq } from 'drizzle-orm';
+import { env } from '../src/env.js';
+import { __setLookupForTests, __setNetGuardBypassForTests } from '../src/domain/backup/net-guard.js';
 import { __setBackupFetchForTests } from '../src/domain/backup/providers.js';
 import { decryptEnvelope, type EncryptedEnvelope } from '../src/http/routes/backup/crypto.js';
 import { startFakeFtp, type FakeFtp } from './helpers/fake-ftp.js';
@@ -435,5 +437,134 @@ describe.skipIf(!RUN)('/api/backup/destination', () => {
       .from(schema.backupDestinations)
       .where(eq(schema.backupDestinations.userId, userAId));
     expect(rows).toHaveLength(0);
+  });
+  describe('destination policy', () => {
+    const put = (payload: Record<string, unknown>) =>
+      app.inject({ method: 'PUT', url: '/api/backup/destination', headers: { cookie: cookieA }, payload });
+    const webdav = (over: Record<string, unknown> = {}) => ({
+      kind: 'webdav',
+      url: 'http://nas.local:5005/dav',
+      username: 'julien',
+      password: 'p4ss',
+      passphrase: PASSPHRASE,
+      ...over,
+    });
+    const ftpBody = (over: Record<string, unknown> = {}) => ({
+      kind: 'ftp',
+      host: 'nas.local',
+      username: 'freebox',
+      password: 'p4ss',
+      passphrase: PASSPHRASE,
+      ...over,
+    });
+    const statusConfigured = async () =>
+      (await app.inject({ method: 'GET', url: '/api/backup/destination', headers: { cookie: cookieA } })).json()
+        .configured;
+
+    afterEach(() => {
+      __setNetGuardBypassForTests(true);
+      __setLookupForTests(null);
+    });
+
+    it.each([
+      ['webdav loopback', webdav({ url: 'http://127.0.0.1:5005/dav' })],
+      ['webdav metadata', webdav({ url: 'http://169.254.169.254/latest/meta-data' })],
+      ['webdav ipv6 loopback', webdav({ url: 'http://[::1]:8080/' })],
+      ['ftp loopback', ftpBody({ host: '127.0.0.1' })],
+      ['ftp mapped metadata', ftpBody({ host: '::ffff:169.254.169.254' })],
+    ])('%s is a 400 and stores nothing', async (_what, payload) => {
+      __setNetGuardBypassForTests(false);
+      let fetched = false;
+      __setBackupFetchForTests((async () => {
+        fetched = true;
+        return new Response(null, { status: 201 });
+      }) as typeof fetch);
+      const res = await put(payload);
+      expect(res.statusCode).toBe(400);
+      expect(res.json().error).toBe('destination not allowed');
+      expect(fetched).toBe(false);
+      expect(await statusConfigured()).toBe(false);
+    });
+
+    it('a hostname resolving to loopback is refused after DNS resolution', async () => {
+      __setNetGuardBypassForTests(false);
+      __setLookupForTests((async () => [{ address: '127.0.0.1', family: 4 }]) as unknown as Parameters<
+        typeof __setLookupForTests
+      >[0]);
+      expect((await put(webdav({ url: 'http://innocent.example/dav' }))).statusCode).toBe(400);
+      expect((await put(ftpBody({ host: 'innocent.example' }))).statusCode).toBe(400);
+    });
+
+    it('rejects CR/LF/NUL in ftp fields and webdav username/subdir with 400', async () => {
+      for (const payload of [
+        ftpBody({ username: 'a\r\nDELE x' }),
+        ftpBody({ password: 'p\nq' }),
+        ftpBody({ subdir: 'a\r\nMKD b' }),
+        ftpBody({ host: 'nas\r\nQUIT' }),
+        ftpBody({ username: 'a\0b' }),
+        webdav({ username: 'u\r\nX: y' }),
+        webdav({ subdir: 'a\nb' }),
+      ]) {
+        expect((await put(payload)).statusCode).toBe(400);
+      }
+    });
+
+    it('a folder outside BACKUP_FOLDER_ROOT is a 400 naming the variable', async () => {
+      const prev = env.BACKUP_FOLDER_ROOT;
+      const inner = join(dir, 'root-only');
+      await mkdir(inner);
+      env.BACKUP_FOLDER_ROOT = inner;
+      try {
+        const res = await put(folderPayload({ path: dir }));
+        expect(res.statusCode).toBe(400);
+        expect(res.json().error).toBe('destination not allowed');
+        expect(res.json().detail).toMatch(/BACKUP_FOLDER_ROOT/);
+        expect(await statusConfigured()).toBe(false);
+      } finally {
+        env.BACKUP_FOLDER_ROOT = prev;
+      }
+    });
+
+    it('probe failures return a generic category, never the upstream text', async () => {
+      __setBackupFetchForTests((async () => {
+        throw Object.assign(new TypeError('connect ECONNREFUSED 10.0.0.7:5005 secret-upstream-detail'), {
+          cause: { code: 'ECONNREFUSED' },
+        });
+      }) as typeof fetch);
+      const res = await put(webdav());
+      expect(res.statusCode).toBe(502);
+      expect(res.json().detail).toBe('connection refused');
+      expect(res.body).not.toMatch(/secret-upstream-detail|10\.0\.0\.7/);
+
+      __setBackupFetchForTests((async () => new Response('<h1>nginx internal build 1.2.3</h1>', { status: 500 })) as typeof fetch);
+      const res2 = await put(webdav());
+      expect(res2.statusCode).toBe(502);
+      expect(res2.json().detail).toBe('unexpected response');
+      expect(res2.body).not.toMatch(/nginx|HTTP 500/);
+    });
+
+    it('run-now and the status API expose only the generic category', async () => {
+      expect((await put(folderPayload())).statusCode).toBe(200);
+      const prev = env.BACKUP_FOLDER_ROOT;
+      const inner = join(dir, 'moved-root');
+      await mkdir(inner);
+      env.BACKUP_FOLDER_ROOT = inner;
+      try {
+        const run = await app.inject({
+          method: 'POST',
+          url: '/api/backup/destination/run-now',
+          headers: { cookie: cookieA },
+        });
+        expect(run.statusCode).toBe(502);
+        expect(run.json().detail).toBe('destination not allowed');
+        const status = (
+          await app.inject({ method: 'GET', url: '/api/backup/destination', headers: { cookie: cookieA } })
+        ).json();
+        expect(status.lastError).toBe('destination not allowed');
+      } finally {
+        env.BACKUP_FOLDER_ROOT = prev;
+        await app.inject({ method: 'DELETE', url: '/api/backup/destination', headers: { cookie: cookieA } });
+      }
+    });
   });
 });

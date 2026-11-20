@@ -213,7 +213,11 @@ libraries and why each one).
 
 - Backup export / import (accounts, transactions, checkpoints, splits,
   budgets, rules) with optional passphrase encryption (AES-256-GCM +
-  scrypt) on export.
+  scrypt) on export. Scheduled remote backups (WebDAV, FTP, or a folder)
+  refuse loopback/link-local targets, and folder destinations must sit
+  inside `BACKUP_FOLDER_ROOT` (default `<DATA_DIR>/backups`; on desktop,
+  your home directory or an external disk / mounted share) — see
+  [docs/users/backup-recovery.md](docs/users/backup-recovery.md).
 - Optional encryption at rest for the database, enabled from the
   Réglages security section — see
   [docs/users/encryption-at-rest.md](docs/users/encryption-at-rest.md).

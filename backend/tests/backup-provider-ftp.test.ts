@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { __setLookupForTests, __setNetGuardBypassForTests } from '../src/domain/backup/net-guard.js';
+import { DestinationNotAllowedError } from '../src/domain/backup/errors.js';
 import { createFtpProvider } from '../src/domain/backup/ftp.js';
 import { BackupProviderError } from '../src/domain/backup/providers.js';
 import { startFakeFtp, type FakeFtp } from './helpers/fake-ftp.js';
@@ -84,5 +86,57 @@ describe('ftp provider', () => {
     const p = createFtpProvider(cfg({ port: closedPort }), 'p4ss');
     await expect(p.list()).rejects.toThrow(BackupProviderError);
     ftp = await startFakeFtp(); // afterEach closes it again
+  });
+});
+
+describe('ftp provider hardening', () => {
+  it.each([
+    ['username', { username: 'a\r\nDELE x' }],
+    ['host', { host: '127.0.0.1\r\nQUIT' }],
+    ['subdir', { subdir: 'ok\nMKD evil' }],
+    ['username (NUL)', { username: 'a\0b' }],
+  ])('rejects CR/LF/NUL in the %s before connecting', async (_what, over) => {
+    const p = createFtpProvider(cfg(over), 'p4ss');
+    await expect(p.upload(NAME, Buffer.from('x'))).rejects.toThrow(/forbidden characters/);
+    expect(ftp.log).toEqual([]);
+  });
+
+  it('rejects CR/LF in the password before connecting', async () => {
+    const p = createFtpProvider(cfg(), 'p4ss\r\nDELE x');
+    await expect(p.list()).rejects.toThrow(/forbidden characters/);
+    expect(ftp.log).toEqual([]);
+  });
+
+  describe('network policy', () => {
+    beforeEach(() => __setNetGuardBypassForTests(false));
+    afterEach(() => {
+      __setLookupForTests(null);
+      __setNetGuardBypassForTests(true);
+    });
+
+    it('refuses a loopback / link-local host without opening a socket', async () => {
+      for (const host of ['127.0.0.1', '169.254.169.254', '::1']) {
+        const p = createFtpProvider(cfg({ host }), 'p4ss');
+        await expect(p.upload(NAME, Buffer.from('x'))).rejects.toBeInstanceOf(DestinationNotAllowedError);
+      }
+      expect(ftp.log).toEqual([]);
+    });
+
+    it('refuses a hostname that resolves to loopback', async () => {
+      __setLookupForTests((async () => [{ address: '127.0.0.1', family: 4 }]) as unknown as Parameters<
+        typeof __setLookupForTests
+      >[0]);
+      const p = createFtpProvider(cfg({ host: 'nas.example' }), 'p4ss');
+      await expect(p.list()).rejects.toBeInstanceOf(DestinationNotAllowedError);
+      expect(ftp.log).toEqual([]);
+    });
+  });
+
+  it('classifies a refused connection', async () => {
+    const dead = await startFakeFtp();
+    const port = dead.port;
+    await dead.close();
+    const p = createFtpProvider(cfg({ port }), 'p4ss');
+    expect(await p.list().catch((e) => e.category)).toBe('connection refused');
   });
 });

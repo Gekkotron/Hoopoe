@@ -20,7 +20,46 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
   Existing MCP users keep write access (migration 0051 backfills them).
   The switch never rotates or revokes the token.
 
+### Changed
+- **Folder backup destinations are confined to `BACKUP_FOLDER_ROOT`.** The
+  folder must resolve (symlinks followed) inside this directory, checked on
+  save and before every run. Default: `<DATA_DIR>/backups` (`/data/backups`
+  in Docker); in the desktop app, your home directory or an external disk /
+  mounted share (`/Volumes` on macOS, `/media`, `/run/media`, `/mnt` on
+  Linux, any non-system drive on Windows). Existing folder
+  destinations outside the root stop working (the run reports
+  "destination not allowed"): move them under the root, or set
+  `BACKUP_FOLDER_ROOT` in `.env` to a directory that contains them.
+
 ### Security
+- **Backup destinations can no longer target the host itself, hang, or inject
+  commands.** WebDAV URLs and FTP hosts that resolve to loopback, link-local
+  (including the 169.254.169.254 cloud metadata address) or unspecified
+  addresses, including IPv4-mapped IPv6 forms, are refused on save, on the
+  test write and before every upload, list and delete; the check runs after
+  DNS resolution and refuses if any resolved address is blocked (private LAN
+  addresses stay allowed). FTP connects to the vetted address; WebDAV
+  re-checks right before each request and refuses redirects. WebDAV requests
+  now time out (30 s, 5 min for uploads) and FTP has connect and command
+  timeouts. CR, LF and NUL are rejected in every FTP field and in the WebDAV
+  username and subfolder, which closes FTP command injection. The test
+  write, run-now and the status API return a short category (connection
+  refused, authentication failed, timed out, destination not allowed,
+  unexpected response) instead of upstream error text, which is logged
+  server-side only.
+
+- **The desktop app now authenticates its own window with a per-launch
+  token.** The desktop backend answers every request as the local user, so
+  any other process or OS user on the machine could call it through the
+  loopback port. The shell now generates a random 256-bit token on every
+  launch, passes it to the backend through the `HOOPOE_LAUNCH_TOKEN`
+  environment variable (not the command line) and opens its window at
+  `/__launch?token=...`, which sets an `HttpOnly`, `SameSite=Strict` session
+  cookie. Every other request without that cookie gets 403. `/api/mcp`
+  keeps its own envelope authentication and is not affected. The desktop
+  backend refuses to start without the token; the LAN/Docker server is
+  unchanged.
+
 - **The Discord webhook URL and the CallMeBot API key are now encrypted at
   rest and never returned.** They were stored in plaintext in the settings
   JSON and sent back by `GET /api/settings`. They are now AES-256-GCM
@@ -61,6 +100,14 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
   every client back in one rate-limit bucket, so the backend now refuses to
   boot with one. List the proxy addresses, CIDRs or presets instead (the
   Docker Compose default `loopback,uniquelocal` is unaffected).
+
+### Fixed
+- **Restoring a backup no longer breaks bank sync.** A restore used to
+  empty the bank account mappings (single-user installs) or unmap them
+  (multi-user), so connections stayed but synced nothing. The mappings are
+  now kept and re-linked to the restored account with the same name. Links
+  whose account name is not in the backup stay unmapped and are listed in
+  the restore response as `unlinkedBankAccounts`.
 
 ## [1.0.0-rc.10] - 2026-10-20
 

@@ -64,6 +64,17 @@ Hoopoe is designed as a **single-tenant, LAN-only** deployment
   behind an HTTPS-terminating reverse proxy so the cookie isn't
   transmitted over plain HTTP.
 
+- The **desktop app** runs its backend without accounts, bound to
+  `127.0.0.1` and answering only loopback `Host` names. To keep other local
+  processes and OS users out, the shell generates a random token on every
+  launch, hands it to the backend through the environment and opens its
+  window with it; the backend then requires the resulting `HttpOnly`,
+  `SameSite=Strict` cookie on every request (403 otherwise). `/api/mcp`
+  is the one exemption, as it has its own authentication. A process running
+  as the same OS user can still read the token from the backend's
+  environment; the token protects against other users and unrelated
+  processes, not against code already running as you.
+
 The project is **not** intended to be reachable from the public internet
 without an authenticating reverse proxy (Tailscale, Cloudflare Access,
 nginx basic-auth, etc.) between it and the outside world.
