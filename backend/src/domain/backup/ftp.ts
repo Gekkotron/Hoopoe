@@ -1,6 +1,8 @@
 import { createConnection, type Socket } from 'node:net';
 import { isBackupFilename } from './dump.js';
-import { assertPlainName, BackupProviderError, type BackupProvider } from './providers.js';
+import { BackupProviderError, categorizeNetworkError } from './errors.js';
+import { hasControlChars, resolveAllowedAddresses } from './net-guard.js';
+import { assertPlainName, type BackupProvider } from './providers.js';
 
 // Minimal FTP client for the FTP backup destination — the Freebox's disk
 // only speaks FTP/SMB (no WebDAV), and FTP is the one of those a Node
@@ -13,7 +15,9 @@ import { assertPlainName, BackupProviderError, type BackupProvider } from './pro
 // then RNFR/RNTO so a dropped connection never leaves a truncated file
 // under a trusted name), NLST, DELE, QUIT.
 
-const FTP_TIMEOUT_MS = 15_000;
+// Connect ceiling, and idle ceiling for every later command / data transfer.
+export const FTP_CONNECT_TIMEOUT_MS = 15_000;
+export const FTP_COMMAND_TIMEOUT_MS = 30_000;
 
 export type FtpDialConfig = {
   host: string;
@@ -30,16 +34,23 @@ function replyLine(r: Reply): string {
   return r.text.split('\n')[0] ?? String(r.code);
 }
 
-function dial(host: string, port: number, what: string): Promise<Socket> {
+// `address` is an already-vetted IP literal (see resolveAllowedAddresses), so
+// the socket never re-resolves a name behind the guard's back.
+function dial(address: string, port: number, what: string): Promise<Socket> {
   return new Promise((resolve, reject) => {
-    const s = createConnection({ host, port });
-    s.setTimeout(FTP_TIMEOUT_MS);
-    s.once('connect', () => resolve(s));
+    const s = createConnection({ host: address, port });
+    s.setTimeout(FTP_CONNECT_TIMEOUT_MS);
+    s.once('connect', () => {
+      s.setTimeout(FTP_COMMAND_TIMEOUT_MS);
+      resolve(s);
+    });
     s.once('timeout', () => {
       s.destroy();
-      reject(new BackupProviderError(`ftp ${what}: connection timed out`));
+      reject(new BackupProviderError(`ftp ${what}: connection timed out`, 'timed out'));
     });
-    s.once('error', (e) => reject(new BackupProviderError(`ftp ${what}: ${e.message}`)));
+    s.once('error', (e) =>
+      reject(new BackupProviderError(`ftp ${what}: ${e.message}`, categorizeNetworkError(e))),
+    );
   });
 }
 
@@ -53,10 +64,16 @@ class FtpConn {
   private err: Error | null = null;
 
   constructor(private socket: Socket) {
-    socket.setTimeout(FTP_TIMEOUT_MS);
-    socket.on('timeout', () => this.fail(new BackupProviderError('ftp: control connection timed out')));
-    socket.on('error', (e) => this.fail(new BackupProviderError(`ftp: ${e.message}`)));
-    socket.on('close', () => this.fail(new BackupProviderError('ftp: connection closed unexpectedly')));
+    socket.setTimeout(FTP_COMMAND_TIMEOUT_MS);
+    socket.on('timeout', () =>
+      this.fail(new BackupProviderError('ftp: control connection timed out', 'timed out')),
+    );
+    socket.on('error', (e) =>
+      this.fail(new BackupProviderError(`ftp: ${e.message}`, categorizeNetworkError(e))),
+    );
+    socket.on('close', () =>
+      this.fail(new BackupProviderError('ftp: connection closed unexpectedly', 'connection failed')),
+    );
     socket.on('data', (chunk) => this.onData(chunk));
   }
 
@@ -101,6 +118,10 @@ class FtpConn {
   }
 
   cmd(command: string): Promise<Reply> {
+    // Defence in depth: the zod layer already refuses these in every field.
+    if (hasControlChars(command)) {
+      return Promise.reject(new BackupProviderError('ftp: command contains forbidden characters'));
+    }
     this.socket.write(command + '\r\n');
     return this.response();
   }
@@ -123,8 +144,9 @@ class FtpConn {
 }
 
 // Opens the passive-mode data connection. Deliberately dials the control
-// connection's host rather than the IP advertised in the 227 reply —
-// NATted servers advertise addresses the client can't reach.
+// connection's vetted address rather than the IP advertised in the 227
+// reply — NATted servers advertise addresses the client can't reach, and
+// honouring it would let a server redirect us to a blocked address.
 async function pasv(conn: FtpConn, host: string): Promise<Socket> {
   const r = await conn.cmd('PASV');
   const m = /\((\d+),(\d+),(\d+),(\d+),(\d+),(\d+)\)/.exec(r.text);
@@ -151,19 +173,29 @@ async function enterDir(conn: FtpConn, subdir: string | null): Promise<void> {
 async function withFtp<T>(
   cfg: FtpDialConfig,
   password: string,
-  fn: (conn: FtpConn) => Promise<T>,
+  fn: (conn: FtpConn, address: string) => Promise<T>,
 ): Promise<T> {
-  const socket = await dial(cfg.host, cfg.port, 'connect');
+  for (const v of [cfg.host, cfg.username, password, cfg.subdir ?? '']) {
+    if (hasControlChars(v)) {
+      throw new BackupProviderError('ftp: destination field contains forbidden characters');
+    }
+  }
+  // Vet the resolved addresses and connect to the vetted IP itself, so a
+  // DNS answer that changes between the check and the connect is harmless.
+  const [address] = await resolveAllowedAddresses(cfg.host);
+  const socket = await dial(address!, cfg.port, 'connect');
   const conn = new FtpConn(socket);
   try {
     const greeting = await conn.response();
     if (greeting.code !== 220) throw new BackupProviderError(`ftp greeting: ${replyLine(greeting)}`);
     let r = await conn.cmd(`USER ${cfg.username}`);
     if (r.code === 331) r = await conn.cmd(`PASS ${password}`);
-    if (r.code !== 230) throw new BackupProviderError(`ftp login: authentication failed (${r.code})`);
+    if (r.code !== 230) {
+      throw new BackupProviderError(`ftp login: authentication failed (${r.code})`, 'authentication failed');
+    }
     await conn.cmdExpect('TYPE I', [200], 'binary mode');
     await enterDir(conn, cfg.subdir);
-    return await fn(conn);
+    return await fn(conn, address!);
   } finally {
     conn.quit();
   }
@@ -171,7 +203,13 @@ async function withFtp<T>(
 
 function sendAll(data: Socket, bytes: Buffer): Promise<void> {
   return new Promise((resolve, reject) => {
-    data.once('error', (e) => reject(new BackupProviderError(`ftp data connection: ${e.message}`)));
+    data.once('error', (e) =>
+      reject(new BackupProviderError(`ftp data connection: ${e.message}`, categorizeNetworkError(e))),
+    );
+    data.once('timeout', () => {
+      data.destroy();
+      reject(new BackupProviderError('ftp data connection timed out', 'timed out'));
+    });
     data.end(new Uint8Array(bytes), () => resolve());
   });
 }
@@ -180,7 +218,13 @@ function readAll(data: Socket): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     data.on('data', (c) => chunks.push(c));
-    data.once('error', (e) => reject(new BackupProviderError(`ftp data connection: ${e.message}`)));
+    data.once('error', (e) =>
+      reject(new BackupProviderError(`ftp data connection: ${e.message}`, categorizeNetworkError(e))),
+    );
+    data.once('timeout', () => {
+      data.destroy();
+      reject(new BackupProviderError('ftp data connection timed out', 'timed out'));
+    });
     data.once('end', () => resolve(Buffer.concat(chunks)));
   });
 }
@@ -189,13 +233,13 @@ export function createFtpProvider(cfg: FtpDialConfig, password: string): BackupP
   return {
     async upload(name, bytes) {
       assertPlainName(name);
-      await withFtp(cfg, password, async (conn) => {
+      await withFtp(cfg, password, async (conn, address) => {
         // No leading dot: the Freebox FTP server refuses hidden names
         // outright (dev.freebox.fr FS#3196). The prefix keeps the partial
         // file out of isBackupFilename's pattern, so pruning and restore
         // guidance never see it.
         const tmp = `hoopoe-tmp-${name}`;
-        const data = await pasv(conn, cfg.host);
+        const data = await pasv(conn, address);
         const r = await conn.cmd(`STOR ${tmp}`);
         if (r.code !== 125 && r.code !== 150) {
           data.destroy();
@@ -211,8 +255,8 @@ export function createFtpProvider(cfg: FtpDialConfig, password: string): BackupP
       });
     },
     async list(filter = isBackupFilename) {
-      return withFtp(cfg, password, async (conn) => {
-        const data = await pasv(conn, cfg.host);
+      return withFtp(cfg, password, async (conn, address) => {
+        const data = await pasv(conn, address);
         const r = await conn.cmd('NLST');
         // Some servers 450/550 an empty directory instead of sending an
         // empty listing.

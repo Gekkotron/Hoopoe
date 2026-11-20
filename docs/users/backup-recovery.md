@@ -36,6 +36,8 @@ Hoopoe can push an encrypted backup to a remote destination **automatically, onc
 
 Files are named `athena-backup-YYYY-MM-DD-HHMMSS.enc.json`. Retention keeps the newest N files (*Backups to keep*, default 30); pruning only ever touches files matching that exact name pattern, so anything else living in the same folder is never deleted.
 
+WebDAV and FTP destinations may not point at this machine itself: loopback (`127.0.0.1`, `::1`), link-local (`169.254.x.x`, `fe80::`) and unspecified addresses are refused, checked after DNS resolution. Private LAN addresses (`192.168.x.x`, `10.x.x.x`, `172.16-31.x.x`) are fine. Errors are reported as a short category (connection refused, authentication failed, timed out, …); the details are in the server log.
+
 One destination per user. Saving the card performs a **real test write** against the destination before storing anything — a typo'd URL, a wrong password, or an unmounted folder is rejected immediately with the underlying error. When editing an already-configured destination, leaving the password and passphrase fields blank keeps the stored ones (they are never displayed back).
 
 ### WebDAV destination
@@ -71,7 +73,7 @@ dropped connection never leaves a truncated backup behind.
 
 ### Folder destination
 
-An absolute path on the machine running the backend: an SMB/NFS mount, an external disk, a synced folder. The folder must already exist — Hoopoe deliberately refuses to create it, so a missing network mount fails loudly instead of silently writing to a local stub. In Docker, mount the target into the backend container and point the path at the mount.
+An absolute path on the machine running the backend: an SMB/NFS mount, an external disk, a synced folder. The path must resolve (symlinks included) inside **`BACKUP_FOLDER_ROOT`**: `<DATA_DIR>/backups` (`/data/backups` in Docker) on a server install, your home directory or an external disk / mounted share in the desktop app (`/Volumes` on macOS, `/media`, `/run/media` or `/mnt` on Linux, any non-system drive on Windows). Setting `BACKUP_FOLDER_ROOT` replaces those defaults with that single directory. Anything outside is refused; mount your share under that directory or set `BACKUP_FOLDER_ROOT` in `.env`. The folder must already exist — Hoopoe deliberately refuses to create it, so a missing network mount fails loudly instead of silently writing to a local stub. In Docker, mount the target into the backend container and point the path at the mount.
 
 **Freebox example** — enable *Partages Windows* in Freebox OS (Paramètres → Mode avancé), mount the share on the host (share name is typically `Disque dur`; `smbclient -L mafreebox.freebox.fr -N` lists it), e.g. in `/etc/fstab`:
 
@@ -79,7 +81,7 @@ An absolute path on the machine running the backend: an SMB/NFS mount, an extern
 //mafreebox.freebox.fr/Disque\040dur  /mnt/freebox  cifs  credentials=/etc/freebox-smb.cred,vers=3.0,iocharset=utf8,_netdev,x-systemd.automount  0  0
 ```
 
-then bind-mount a subfolder into the backend container (`/mnt/freebox/athena-backups:/backups`) and use `/backups` as the folder path.
+then bind-mount a subfolder into the backend container (`/mnt/freebox/athena-backups:/data/backups/freebox`) and use `/data/backups/freebox` as the folder path (it must be inside `BACKUP_FOLDER_ROOT`).
 
 Want an off-site copy without giving Hoopoe cloud credentials? Point the folder destination at a directory that `rclone`, Syncthing, or your NAS's own cloud tooling replicates.
 

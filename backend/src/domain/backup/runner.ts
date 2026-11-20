@@ -19,6 +19,9 @@ import {
   type BackupProvider,
 } from './providers.js';
 import { createFtpProvider } from './ftp.js';
+import { publicErrorCategory } from './errors.js';
+import { assertFolderInsideRoot } from './folder-root.js';
+import { resolveAllowedAddresses } from './net-guard.js';
 import {
   getDestination,
   recordRun,
@@ -43,6 +46,20 @@ export function providerFor(dest: BackupDestinationRecord): BackupProvider {
   if (dest.kind === 'folder') return createFolderProvider((dest.config as FolderConfig).path);
   if (dest.kind === 'ftp') return createFtpProvider(dest.config as FtpConfig, dest.secret ?? '');
   return createWebdavProvider(dest.config as WebdavConfig, dest.secret ?? '');
+}
+
+// Policy check for a destination: folder inside BACKUP_FOLDER_ROOT, remote
+// host not loopback/link-local/unspecified after DNS resolution. Throws
+// DestinationNotAllowedError. The providers re-check before every operation;
+// this is the early, friendly gate (PUT validation, start of a run).
+export async function assertDestinationAllowed(dest: BackupDestinationRecord): Promise<void> {
+  if (dest.kind === 'folder') {
+    await assertFolderInsideRoot((dest.config as FolderConfig).path);
+  } else if (dest.kind === 'ftp') {
+    await resolveAllowedAddresses((dest.config as FtpConfig).host);
+  } else {
+    await resolveAllowedAddresses(new URL((dest.config as WebdavConfig).url).hostname);
+  }
 }
 
 // Upload then trim to the newest keepLast files matching `filter`. The
@@ -75,6 +92,7 @@ export async function runBackupNow(userId: number): Promise<BackupRunSummary> {
   const dest = await getDestination(userId);
   if (!dest) throw new BackupNotConfiguredError();
   try {
+    await assertDestinationAllowed(dest);
     const provider = providerFor(dest);
     const dump = await buildDump(userId);
     const envelope = encryptEnvelope(JSON.stringify(dump), dest.passphrase);
@@ -106,7 +124,9 @@ export async function runBackupNow(userId: number): Promise<BackupRunSummary> {
     await recordRun(userId, { ok: true });
     return attachmentsFilename ? { filename, attachmentsFilename } : { filename };
   } catch (err) {
-    await recordRun(userId, { ok: false, error: err instanceof Error ? err.message : String(err) });
+    // Only the generic category is persisted (and shown by the status API);
+    // the caller logs the full error server-side.
+    await recordRun(userId, { ok: false, error: publicErrorCategory(err) });
     throw err;
   }
 }

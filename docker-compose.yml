@@ -40,6 +40,9 @@ services:
       # unless METRICS_PUBLIC=true.
       METRICS_TOKEN: ${METRICS_TOKEN:-}
       METRICS_PUBLIC: ${METRICS_PUBLIC:-false}
+      # Folder backup destinations must resolve inside this directory
+      # (default: /data/backups in the container).
+      BACKUP_FOLDER_ROOT: ${BACKUP_FOLDER_ROOT:-}
       # Wall-clock features (bank-sync retrieval hour) follow this timezone;
       # containers default to UTC otherwise. Node honors TZ without tzdata.
       TZ: ${TZ:-UTC}
