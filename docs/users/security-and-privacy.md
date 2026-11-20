@@ -23,6 +23,10 @@ internet. The Tauri desktop build goes one step further: it binds to
 Docker default) uses `@fastify/session` with a signed cookie. On successful
 login the session id is regenerated (`req.session.regenerate()`) to prevent
 session fixation, and `/api/auth/logout` destroys the session server-side.
+Changing your password or turning off two-factor authentication signs out
+every other session of your account; the one you made the change from stays
+open. After five wrong two-factor codes in a row, the account's 2FA check is
+locked for 15 minutes, from any device or address.
 Login is rate-limited by `@fastify/rate-limit` to slow down brute-force
 attempts against weak passwords.
 

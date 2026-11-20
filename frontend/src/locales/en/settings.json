@@ -386,7 +386,7 @@
       "useTotpCodeLink": "Use a TOTP code",
       "logoutLink": "Sign out and go back",
       "invalidCodeError": "Invalid code.",
-      "rateLimitedError": "Too many attempts. Please try again in a minute.",
+      "rateLimitedError": "Too many attempts. Please wait a few minutes before trying again.",
       "sessionExpiredError": "Session expired. Please sign in again."
     }
   },
