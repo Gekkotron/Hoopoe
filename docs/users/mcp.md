@@ -37,6 +37,19 @@ create, update, delete, and search your transactions.
    You won't be able to see it again; if you lose it, generate a new one
    (this immediately invalidates the previous token).
 
+### Read-only by default
+
+A new MCP token is **read-only**: the assistant can list accounts and
+categories, search transactions and reconcile statements, but
+`create_transaction`, `update_transaction` and `delete_transaction` are
+refused by the backend with a clear "read-only MCP token" error. To let the
+assistant change your data, tick **Allow changes** in the same section.
+Untick it to go back to read-only. This switch does not rotate or revoke
+the token.
+
+Accounts that were already using MCP before this option existed keep write
+access; review the switch if you would rather they were read-only.
+
 ## 2. Build the server
 
 ```sh
@@ -144,6 +157,10 @@ knowledge of, or dependency on, which model is driving the conversation.
 | `update_transaction` | Update fields of an existing transaction by id. | `id` (required), plus any of `accountId`, `date`, `amount`, `rawLabel`, `categoryId` (nullable), `notes` (nullable), `lockYears` (nullable) |
 | `delete_transaction` | Delete a transaction by id. | `id` (required) |
 | `reconcile_statement` | Reconcile a bank-statement PDF against Hoopoe's transactions (read-only). See [Reconcile a statement](#reconcile-a-statement) below. | `path` (required, absolute PDF path), `accountId` (required), `fromDate`, `toDate` (`YYYY-MM-DD`) |
+
+Tools that change data (`create_transaction`, `update_transaction`,
+`delete_transaction`) require **Allow changes** to be on; the others are
+always available.
 
 Amounts are decimal strings with up to 2 decimal places (e.g. `"-42.50"`).
 Dates are `YYYY-MM-DD`.

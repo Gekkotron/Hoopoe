@@ -558,6 +558,7 @@ export const userSettings = pgTable('user_settings', {
     .default({}),
   mcpEnabled: boolean('mcp_enabled').notNull().default(false),
   mcpKeyWrapped: text('mcp_key_wrapped'),
+  mcpReadOnly: boolean('mcp_read_only').notNull().default(true),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 

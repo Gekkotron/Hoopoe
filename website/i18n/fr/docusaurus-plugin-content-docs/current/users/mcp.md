@@ -19,6 +19,12 @@ Hoopoe embarque un serveur [Model Context Protocol](https://modelcontextprotocol
 2. Dans la section **Accès MCP**, activez **Activer l'accès MCP**.
 3. Cliquez sur **Générer un jeton**. Le jeton est affiché **une seule fois** — copiez-le maintenant. Vous ne pourrez pas le revoir ; si vous le perdez, générez-en un nouveau (ce qui invalide immédiatement le précédent).
 
+### Lecture seule par défaut
+
+Un nouveau jeton MCP est en **lecture seule** : l'assistant peut lister les comptes et catégories, rechercher des transactions et rapprocher des relevés, mais `create_transaction`, `update_transaction` et `delete_transaction` sont refusés par le backend avec une erreur « read-only MCP token » explicite. Pour autoriser l'assistant à modifier vos données, cochez **Autoriser les modifications** dans la même section ; décochez pour revenir en lecture seule. Cet interrupteur ne change ni ne révoque le jeton.
+
+Les comptes qui utilisaient déjà MCP avant cette option conservent l'accès en écriture ; vérifiez l'interrupteur si vous préférez la lecture seule.
+
 ## 2. Construire le serveur
 
 ```sh
@@ -102,6 +108,8 @@ Si vous voulez que le client MCP utilise un modèle Ollama local, cela se config
 | `update_transaction` | Modifier les champs d'une transaction existante par id. | `id` (requis), plus n'importe lequel de `accountId`, `date`, `amount`, `rawLabel`, `categoryId` (nullable), `notes` (nullable), `lockYears` (nullable) |
 | `delete_transaction` | Supprimer une transaction par id. | `id` (requis) |
 | `reconcile_statement` | Rapprocher un PDF de relevé bancaire avec les transactions de Hoopoe (lecture seule). Voir [Rapprocher un relevé](#rapprocher-un-relevé) plus bas. | `path` (requis, chemin absolu du PDF), `accountId` (requis), `fromDate`, `toDate` (`YYYY-MM-DD`) |
+
+Les outils qui modifient des données (`create_transaction`, `update_transaction`, `delete_transaction`) nécessitent que **Autoriser les modifications** soit activé ; les autres sont toujours disponibles.
 
 Les montants sont des chaînes décimales avec jusqu'à 2 décimales (par exemple `"-42.50"`). Les dates sont au format `YYYY-MM-DD`.
 

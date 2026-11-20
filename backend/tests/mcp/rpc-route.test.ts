@@ -29,7 +29,7 @@ describe.skipIf(!RUN)('POST /api/mcp/rpc', () => {
     await app.inject({ method: 'POST', url: '/api/onboarding/create', payload: { username: USER, password: 'rpc-12345' } });
     const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: USER, password: 'rpc-12345' } });
     cookie = login.cookies[0]!.name + '=' + login.cookies[0]!.value;
-    await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: { enabled: true } });
+    await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: { enabled: true, readOnly: false } });
     const token = (await app.inject({ method: 'POST', url: '/api/settings/mcp/token', headers: { cookie } })).json().token;
     key = deriveContentKey(Buffer.from(token, 'base64url'));
   });
@@ -139,5 +139,61 @@ describe.skipIf(!RUN)('POST /api/mcp/rpc', () => {
       expect(res.statusCode).toBe(401);
       expect(res.json()).toEqual({ error: 'authentication failed' });
     }
+  });
+
+  describe('read-only scope', () => {
+    async function setReadOnly(readOnly: boolean) {
+      await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: { readOnly } });
+    }
+    afterEach(async () => { await setReadOnly(false); });
+
+    it('read-only: reads work, writes get an encrypted 403 and change nothing', async () => {
+      const acc = await app.inject({
+        method: 'POST', url: '/api/accounts', headers: { cookie },
+        payload: { name: 'RO', type: 'courant', openingDate: '2026-01-01' },
+      });
+      const accountId = acc.json().account.id;
+      const created = decode(await call('create_transaction', { accountId, date: '2026-02-01', amount: '-9.99', rawLabel: 'Original' }));
+      expect(created.status).toBe(201);
+      const id = created.body.transaction.id;
+
+      await setReadOnly(true);
+
+      expect(decode(await call('search_transactions', { search: 'Original' })).status).toBe(200);
+      expect(decode(await call('list_accounts', {})).status).toBe(200);
+
+      const create = decode(await call('create_transaction', { accountId, date: '2026-02-02', amount: '-1.00', rawLabel: 'Blocked' }));
+      expect(create.status).toBe(403);
+      expect(create.body).toEqual({ error: 'read-only MCP token: create_transaction is not allowed' });
+      const update = decode(await call('update_transaction', { id, notes: 'nope' }));
+      expect(update.status).toBe(403);
+      const del = decode(await call('delete_transaction', { id }));
+      expect(del.status).toBe(403);
+      expect(del.body).toEqual({ error: 'read-only MCP token: delete_transaction is not allowed' });
+
+      const { db } = await import('../../src/db/client.js');
+      const { transactions } = await import('../../src/db/schema.js');
+      const rows = await db.select().from(transactions);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.id).toBe(id);
+      expect(rows[0]!.notes ?? null).toBeNull();
+    });
+
+    it('unknown ops stay 400 when read-only', async () => {
+      await setReadOnly(true);
+      expect(decode(await call('drop_tables', {})).status).toBe(400);
+    });
+
+    it('read-write: create works again after allowing changes', async () => {
+      const acc = await app.inject({
+        method: 'POST', url: '/api/accounts', headers: { cookie },
+        payload: { name: 'RW', type: 'courant', openingDate: '2026-01-01' },
+      });
+      const accountId = acc.json().account.id;
+      await setReadOnly(true);
+      expect(decode(await call('create_transaction', { accountId, date: '2026-02-01', amount: '-2.00', rawLabel: 'X' })).status).toBe(403);
+      await setReadOnly(false);
+      expect(decode(await call('create_transaction', { accountId, date: '2026-02-01', amount: '-2.00', rawLabel: 'X' })).status).toBe(201);
+    });
   });
 });

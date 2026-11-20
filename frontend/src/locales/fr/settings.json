@@ -53,6 +53,8 @@
       "sectionLabel": "Accès MCP",
       "description": "Permet à un assistant local (Ollama via un client MCP) de gérer vos transactions. Le contenu est chiffré avec le jeton — rien ne circule en clair.",
       "enableLabel": "Activer l'accès MCP",
+      "allowChangesLabel": "Autoriser les modifications",
+      "allowChangesHint": "Désactivé = lecture seule : l'assistant peut consulter mais pas créer, modifier ni supprimer de transactions.",
       "generateButton": "Générer un jeton",
       "regenerateButton": "Régénérer le jeton",
       "revokeButton": "Révoquer",

@@ -43,7 +43,7 @@ describe.skipIf(!RUN)('mcp client against the real /api/mcp/rpc route', () => {
     await app.inject({ method: 'POST', url: '/api/onboarding/create', payload: { username: USER, password: 'mcp-compat-1234' } });
     const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: USER, password: 'mcp-compat-1234' } });
     cookie = login.cookies[0]!.name + '=' + login.cookies[0]!.value;
-    await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: { enabled: true } });
+    await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: { enabled: true, readOnly: false } });
     const token = (await app.inject({ method: 'POST', url: '/api/settings/mcp/token', headers: { cookie } })).json().token as string;
 
     // Route the client's fetch through Fastify's injector: same handler,

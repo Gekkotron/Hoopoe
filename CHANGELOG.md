@@ -12,6 +12,18 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
 
 ## [Unreleased]
 
+### Added
+- **MCP read-only scope.** MCP tokens can now be limited to read access.
+  New users default to read-only: `create_transaction`,
+  `update_transaction` and `delete_transaction` are refused (403, enforced
+  by the backend) until **Allow changes** is ticked in Settings → MCP.
+  Existing MCP users keep write access (migration 0051 backfills them).
+  The switch never rotates or revokes the token.
+
+### Security
+- An MCP token no longer implies write access to every transaction by
+  default (see the read-only scope above).
+
 ## [1.0.0-rc.10] - 2026-10-20
 
 Re-cut of rc.9 — same product. rc.9 was never published: its Release

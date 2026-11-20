@@ -24,13 +24,36 @@ describe.skipIf(!RUN)('/api/settings/mcp', () => {
 
   it('defaults to disabled + no token', async () => {
     const res = await app.inject({ method: 'GET', url: '/api/settings/mcp', headers: { cookie } });
-    expect(res.json()).toEqual({ enabled: false, hasToken: false });
+    expect(res.json()).toEqual({ enabled: false, hasToken: false, readOnly: true });
   });
 
   it('PUT toggles enabled', async () => {
     await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: { enabled: true } });
     const res = await app.inject({ method: 'GET', url: '/api/settings/mcp', headers: { cookie } });
     expect(res.json().enabled).toBe(true);
+  });
+
+  it('PUT readOnly toggles the scope without touching enabled or the token', async () => {
+    await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: { enabled: true } });
+    await app.inject({ method: 'POST', url: '/api/settings/mcp/token', headers: { cookie } });
+    const { db } = await import('../../src/db/client.js');
+    const { userSettings } = await import('../../src/db/schema.js');
+    const [before] = await db.select().from(userSettings);
+
+    const off = await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: { readOnly: false } });
+    expect(off.statusCode).toBe(200);
+    expect(off.json()).toEqual({ enabled: true, hasToken: true, readOnly: false });
+    expect((await app.inject({ method: 'GET', url: '/api/settings/mcp', headers: { cookie } })).json().readOnly).toBe(false);
+    const [after] = await db.select().from(userSettings);
+    expect(after!.mcpKeyWrapped).toBe(before!.mcpKeyWrapped);
+
+    const on = await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: { readOnly: true } });
+    expect(on.json().readOnly).toBe(true);
+  });
+
+  it('PUT with neither field is rejected', async () => {
+    const res = await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: {} });
+    expect(res.statusCode).toBe(400);
   });
 
   it('POST token returns a token once and sets hasToken', async () => {

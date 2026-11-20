@@ -47,4 +47,15 @@ describe('RpcClient', () => {
     const c = new RpcClient(cfg, fakeFetch(() => ({ status: 401, body: {} })) as any);
     await expect(c.rpc('list_accounts', {})).rejects.toThrow(/disabled|invalid/i);
   });
+
+  it('surfaces the read-only 403 message instead of "token invalid"', async () => {
+    const msg = 'read-only MCP token: create_transaction is not allowed';
+    const c = new RpcClient(cfg, fakeFetch(() => ({ status: 403, body: { error: msg } })) as any);
+    await expect(c.rpc('create_transaction', {})).rejects.toThrow(msg);
+  });
+
+  it('still maps other 403s to the generic access message', async () => {
+    const c = new RpcClient(cfg, fakeFetch(() => ({ status: 403, body: { error: 'forbidden' } })) as any);
+    await expect(c.rpc('list_accounts', {})).rejects.toThrow(/disabled|invalid/i);
+  });
 });
