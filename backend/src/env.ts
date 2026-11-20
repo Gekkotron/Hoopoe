@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { parseTrustProxy } from './lib/trustProxy.js';
+import { isHopCount, parseTrustProxy } from './lib/trustProxy.js';
 
 const boolish = z
   .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
@@ -62,7 +62,15 @@ export const Env = z
     // client pick its own rate-limit bucket. Docker Compose sets
     // `loopback,uniquelocal` so the nginx container is trusted and the login /
     // 2FA / registration limits key on the real browser address.
-    TRUST_PROXY: z.string().optional().transform(parseTrustProxy),
+    // A hop count is refused: Fastify fails it closed (see lib/trustProxy.ts).
+    TRUST_PROXY: z
+      .string()
+      .optional()
+      .refine((v) => !isHopCount(v), {
+        message:
+          'TRUST_PROXY no longer accepts a hop count; list the proxy addresses, CIDRs or presets instead (e.g. loopback,uniquelocal)',
+      })
+      .transform(parseTrustProxy),
     // Whether /api/onboarding/create accepts new accounts once a user exists.
     // The first account is always allowed so a fresh install can be set up.
     // On by default for multi-user households; set to 0/false once everyone
