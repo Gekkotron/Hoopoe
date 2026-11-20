@@ -3,6 +3,13 @@ import { db } from '../db/client.js';
 import { totpKey, encryptTotpSecret, decryptTotpSecret } from '../domain/auth/totp-crypto.js';
 import { bankSyncKey, encryptPrivateKey, decryptPrivateKey } from '../domain/bank-sync/crypto.js';
 import { backupSecretsKey, encryptSecret, decryptSecret } from '../domain/backup/secrets.js';
+import {
+  notificationSecretsKey,
+  encryptNotificationSecret,
+  decryptNotificationSecret,
+  readNotificationSecretState,
+  rawChannel,
+} from '../domain/notifications/secrets.js';
 import { masterKey, wrapKey, unwrapKey } from '../domain/mcp/crypto.js';
 
 export type SessionSecretMigrationCounts = {
@@ -10,6 +17,7 @@ export type SessionSecretMigrationCounts = {
   bankSyncCredentials: number;
   backupDestinations: number;
   mcpKeys: number;
+  notificationSecrets: number;
 };
 
 // Re-encrypts every SESSION_SECRET-derived field-crypto row in place, in a
@@ -29,6 +37,8 @@ export async function migrateSessionSecret(
   const newBackup = backupSecretsKey(newSecret);
   const oldMk = masterKey(oldSecret);
   const newMk = masterKey(newSecret);
+  const oldNotif = notificationSecretsKey(oldSecret);
+  const newNotif = notificationSecretsKey(newSecret);
 
   return db.transaction(async (tx) => {
     const counts: SessionSecretMigrationCounts = {
@@ -36,6 +46,7 @@ export async function migrateSessionSecret(
       bankSyncCredentials: 0,
       backupDestinations: 0,
       mcpKeys: 0,
+      notificationSecrets: 0,
     };
 
     const totpRows = await tx.execute<{ user_id: number; secret_ciphertext: string }>(
@@ -102,6 +113,34 @@ export async function migrateSessionSecret(
         sql`UPDATE user_settings SET mcp_key_wrapped = ${rewrapped} WHERE user_id = ${row.user_id}`,
       );
       counts.mcpKeys++;
+    }
+
+    // Discord webhook URL / CallMeBot key live inside the settings JSONB.
+    const notifRows = await tx.execute<{ user_id: number; settings: unknown }>(sql`
+      SELECT user_id, settings FROM user_settings
+      WHERE settings #> '{notifications,channels,discord}' ? 'webhookUrlEnc'
+         OR settings #> '{notifications,channels,callmebot}' ? 'apiKeyEnc'
+    `);
+    for (const row of notifRows.rows) {
+      const s = readNotificationSecretState(row.settings);
+      const targets = [
+        { channel: 'discord', encKey: 'webhookUrlEnc', enc: s.discordEnc, field: 'discordWebhookUrl' },
+        { channel: 'callmebot', encKey: 'apiKeyEnc', enc: s.callmebotEnc, field: 'callmebotApiKey' },
+      ] as const;
+      for (const t of targets) {
+        if (!t.enc) continue;
+        const reenc = encryptNotificationSecret(
+          newNotif,
+          row.user_id,
+          t.field,
+          decryptNotificationSecret(oldNotif, row.user_id, t.field, t.enc),
+        );
+        const next = { ...rawChannel(row.settings, t.channel), [t.encKey]: reenc };
+        await tx.execute(sql`UPDATE user_settings
+          SET settings = jsonb_set(settings, ${`{notifications,channels,${t.channel}}`}::text[], ${JSON.stringify(next)}::jsonb)
+          WHERE user_id = ${row.user_id}`);
+      }
+      counts.notificationSecrets++;
     }
 
     return counts;

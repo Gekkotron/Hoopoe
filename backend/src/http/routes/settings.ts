@@ -3,13 +3,27 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import { accounts, userSettings } from '../../db/schema.js';
 import { userId } from '../plugins/auth.js';
-import { SettingsSchema, mergeSettings, mergeNotifications, type FullSettings } from '../../domain/settings/schema.js';
+import {
+  SettingsSchema,
+  mergeSettings,
+  mergeNotifications,
+  toPublicSettings,
+  type PublicSettings,
+} from '../../domain/settings/schema.js';
+import {
+  notificationSecretsKey,
+  encryptNotificationSecret,
+  hasApiKey,
+  hasWebhookUrl,
+  readNotificationSecretState,
+} from '../../domain/notifications/secrets.js';
+import { env } from '../../env.js';
 
 // Load the stored JSONB for `uid`, coerce to a full settings object with
 // defaults filled in, and sanitise any account-id-shaped fields so a
 // dangling or cross-tenant id becomes 'all'. The stored row is not
 // rewritten — only the response is filtered.
-async function loadSettingsFor(uid: number): Promise<FullSettings> {
+async function loadSettingsFor(uid: number): Promise<PublicSettings> {
   const [row] = await db
     .select({ settings: userSettings.settings })
     .from(userSettings)
@@ -29,7 +43,10 @@ async function loadSettingsFor(uid: number): Promise<FullSettings> {
       .where(and(eq(accounts.id, merged.transactionsDefaultAccount), eq(accounts.userId, uid)));
     if (!acc) merged.transactionsDefaultAccount = 'all';
   }
-  return merged;
+  return toPublicSettings(merged, {
+    hasWebhookUrl: hasWebhookUrl(row?.settings),
+    hasApiKey: hasApiKey(row?.settings),
+  });
 }
 
 export async function settingsRoutes(app: FastifyInstance): Promise<void> {
@@ -61,10 +78,44 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
         .from(userSettings)
         .where(eq(userSettings.userId, uid));
       const currentNotifications = mergeSettings(row?.settings ?? {}, {}).notifications;
+      const merged = mergeNotifications(currentNotifications, patch.notifications);
+      // The two channel secrets are write-only and stored encrypted: omitted
+      // = keep the stored ciphertext (or encrypt a leftover legacy plaintext),
+      // '' = clear, anything else = encrypt the new value. The plaintext keys
+      // never reach the JSONB.
+      const state = readNotificationSecretState(row?.settings);
+      const key = notificationSecretsKey(env.SESSION_SECRET);
+      const seal = (
+        incoming: string | undefined,
+        enc: string,
+        legacy: string,
+        field: 'discordWebhookUrl' | 'callmebotApiKey',
+      ): string => {
+        if (incoming === undefined) return enc || (legacy ? encryptNotificationSecret(key, uid, field, legacy) : '');
+        const v = incoming.trim();
+        return v === '' ? '' : encryptNotificationSecret(key, uid, field, v);
+      };
+      const webhookUrlEnc = seal(
+        patch.notifications.channels?.discord?.webhookUrl, state.discordEnc, state.discordLegacy, 'discordWebhookUrl',
+      );
+      const apiKeyEnc = seal(
+        patch.notifications.channels?.callmebot?.apiKey, state.callmebotEnc, state.callmebotLegacy, 'callmebotApiKey',
+      );
+      const { webhookUrl: _w, ...discord } = merged.channels.discord;
+      const { apiKey: _a, ...callmebot } = merged.channels.callmebot;
+      void _w;
+      void _a;
       storagePatch = {
         ...patch,
-        notifications: mergeNotifications(currentNotifications, patch.notifications),
-      };
+        notifications: {
+          ...merged,
+          channels: {
+            ...merged.channels,
+            discord: webhookUrlEnc ? { ...discord, webhookUrlEnc } : discord,
+            callmebot: apiKeyEnc ? { ...callmebot, apiKeyEnc } : callmebot,
+          },
+        },
+      } as unknown as typeof patch;
     }
     // Upsert: create the row if missing, otherwise shallow-merge the JSONB
     // (`settings || excluded.settings` — the right-hand side wins per key).

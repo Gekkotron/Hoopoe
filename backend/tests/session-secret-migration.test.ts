@@ -94,6 +94,7 @@ d('migrateSessionSecret', () => {
       bankSyncCredentials: 1,
       backupDestinations: 1,
       mcpKeys: 1,
+      notificationSecrets: 0,
     });
 
     const [totpRow] = await db.select().from(userTotp).where(eq(userTotp.userId, uid));
@@ -138,6 +139,7 @@ d('migrateSessionSecret', () => {
       bankSyncCredentials: 0,
       backupDestinations: 0,
       mcpKeys: 0,
+      notificationSecrets: 0,
     });
   });
 

@@ -56,7 +56,11 @@ pare-feu ou un VPN (voir
 **Chemin Desktop.** Le build Tauri tourne avec `AUTH_MODE=none` : pas de
 cookies, pas d'écran de connexion, un unique utilisateur local est semé
 au premier démarrage. Ce compromis est sûr parce que le backend ne quitte
-jamais `127.0.0.1` — aucun autre processus du LAN ne peut l'atteindre.
+jamais `127.0.0.1` — aucun autre processus du LAN ne peut l'atteindre. Par sécurité, dans ce
+mode le backend ne répond qu'aux requêtes dont l'en-tête `Host` est
+`127.0.0.1`, `localhost` ou `[::1]` (une page web qui fait pointer son
+propre nom d'hôte vers `127.0.0.1` reçoit un 403), et le serveur LAN/Docker
+refuse de démarrer avec `AUTH_MODE=none`.
 
 ## Verrouillage d'écran
 

@@ -4,6 +4,7 @@ import { pool } from '../db/client.js';
 import { runMigrations } from '../db/migrate.js';
 import { build } from '../buildServer.js';
 import { rotateFromPreviousSecret } from './session-secret-migration.js';
+import { assertServerAuthMode } from './serverAuthMode.js';
 
 const shutdown = async (app: FastifyInstance, signal: string) => {
   app.log.info({ signal }, 'shutting down');
@@ -16,6 +17,13 @@ const shutdown = async (app: FastifyInstance, signal: string) => {
     process.exit(1);
   }
 };
+
+try {
+  assertServerAuthMode(env.AUTH_MODE);
+} catch (err) {
+  console.error((err as Error).message);
+  process.exit(1);
+}
 
 const app = await build();
 
@@ -38,6 +46,12 @@ try {
       );
       process.exit(1);
     }
+  }
+  // After any rotation, so legacy plaintext is sealed under the current key.
+  {
+    const { encryptLegacyNotificationSecrets } = await import('../domain/notifications/secrets.js');
+    const sealed = await encryptLegacyNotificationSecrets(env.SESSION_SECRET);
+    if (sealed > 0) app.log.warn({ rows: sealed }, 'encrypted legacy plaintext notification secrets');
   }
   if (!process.env.OCR_LANG_PATH) app.log.warn('OCR_LANG_PATH not set — first OCR run will attempt CDN fetch (fine for dev, fails on LAN-only deploy).');
   await app.listen({ host: '0.0.0.0', port: env.PORT });

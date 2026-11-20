@@ -21,6 +21,29 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
   The switch never rotates or revokes the token.
 
 ### Security
+- **The Discord webhook URL and the CallMeBot API key are now encrypted at
+  rest and never returned.** They were stored in plaintext in the settings
+  JSON and sent back by `GET /api/settings`. They are now AES-256-GCM
+  encrypted under a key derived from `SESSION_SECRET` (like the other
+  secrets), the API only reports `hasWebhookUrl` / `hasApiKey`, and the
+  Settings page shows "Configured" with Replace / Clear instead of the
+  value. Existing plaintext values are encrypted automatically at the next
+  start, and a `SESSION_SECRET` rotation re-encrypts them.
+
+- **`/metrics` is disabled unless you configure it (behaviour change).**
+  Without `METRICS_TOKEN` the endpoint used to be public and leaked
+  cross-user counts and backup timestamps. It now returns 404 when
+  `METRICS_TOKEN` is unset. Unauthenticated scrapers will get 404 after
+  upgrading: set `METRICS_TOKEN` and send `Authorization: Bearer <token>`,
+  or set `METRICS_PUBLIC=true` to keep the old open endpoint (ignored when
+  a token is set).
+
+- The LAN/Docker server entry now refuses to start with `AUTH_MODE=none`
+  (it listens on all interfaces, which would leave the API open). In
+  desktop mode the backend, including the locked-boot unlock screen, now
+  answers only requests whose `Host` is `127.0.0.1`, `localhost` or `[::1]`,
+  which blocks DNS-rebinding access from web pages.
+
 - An MCP token no longer implies write access to every transaction by
   default (see the read-only scope above).
 

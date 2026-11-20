@@ -264,6 +264,9 @@
       "description": "Choisissez comment et pour quels événements être alerté.",
       "patch_error": "Impossible d'enregistrer ce réglage de notification. Réessayez.",
       "masterToggle": "Activer les notifications",
+      "secretConfigured": "Configuré",
+      "secretReplace": "Remplacer",
+      "secretClear": "Effacer",
       "channels": {
         "sectionLabel": "Canaux",
         "toast": "Notification dans l'application",

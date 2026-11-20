@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
+import { WriteOnlySecretField } from './WriteOnlySecretField';
 import type { NotificationPrefs, NotificationPrefsPatch } from '../../lib/settings';
 
 // Mirrors the backend's accepted webhook shape; a bad URL makes the PATCH 400.
@@ -15,15 +16,27 @@ export function DiscordChannelFields({
 }): JSX.Element {
   const { t } = useTranslation('settings');
   const discord = prefs.channels.discord;
-  const [url, setUrl] = useState(discord.webhookUrl);
+  const [url, setUrl] = useState('');
+  const [replacing, setReplacing] = useState(false);
+  const isSet = discord.hasWebhookUrl;
+  // Back to the "Configured" view whenever the stored state changes (saved or cleared).
+  useEffect(() => {
+    setReplacing(false);
+    setUrl('');
+  }, [isSet]);
   const [maxPerMinute, setMaxPerMinute] = useState(String(discord.maxPerMinute));
   const maxParsed = Number.parseInt(maxPerMinute, 10);
   const maxValue = Number.isFinite(maxParsed) && maxParsed >= 0 ? maxParsed : 0;
   const trimmedUrl = url.trim();
   const urlInvalid = trimmedUrl !== '' && !DISCORD_WEBHOOK_RE.test(trimmedUrl);
-  const dirty = trimmedUrl !== discord.webhookUrl || maxValue !== discord.maxPerMinute;
+  // The URL is only sent when the user typed a new one; otherwise it is
+  // omitted so the stored secret is kept.
+  const sendUrl = trimmedUrl !== '';
+  const dirty = sendUrl || maxValue !== discord.maxPerMinute;
   const save = () => {
-    onPatch({ channels: { discord: { webhookUrl: trimmedUrl, maxPerMinute: maxValue } } });
+    onPatch({
+      channels: { discord: sendUrl ? { webhookUrl: trimmedUrl, maxPerMinute: maxValue } : { maxPerMinute: maxValue } },
+    });
   };
 
   return (
@@ -39,25 +52,18 @@ export function DiscordChannelFields({
 
       {discord.enabled && (
         <div className="flex flex-col gap-2 pl-6 text-sm">
-          <label className="flex flex-col gap-1">
-            <span className="text-ink-300">
-              {t('settings.notifications.channels.discord.webhookUrlLabel')}
-            </span>
-            <input
-              type="url"
-              autoComplete="off"
-              placeholder={t('settings.notifications.channels.discord.webhookUrlPlaceholder')}
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              aria-invalid={urlInvalid}
-              className="input"
-            />
-            {urlInvalid && (
-              <span role="alert" className="text-xs text-clay-300">
-                {t('settings.notifications.channels.discord.webhookUrlInvalid')}
-              </span>
-            )}
-          </label>
+          <WriteOnlySecretField
+            label={t('settings.notifications.channels.discord.webhookUrlLabel')}
+            placeholder={t('settings.notifications.channels.discord.webhookUrlPlaceholder')}
+            type="url"
+            isSet={isSet}
+            replacing={replacing}
+            value={url}
+            onValueChange={setUrl}
+            onReplace={() => setReplacing(true)}
+            onClear={() => onPatch({ channels: { discord: { webhookUrl: '' } } })}
+            error={urlInvalid && t('settings.notifications.channels.discord.webhookUrlInvalid')}
+          />
           <label className="flex flex-col gap-1">
             <span className="text-ink-300">
               {t('settings.notifications.channels.discord.maxPerMinuteLabel')}

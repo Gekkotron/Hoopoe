@@ -264,6 +264,9 @@
       "description": "Choose how and for which events you get alerted.",
       "patch_error": "Couldn't save that notification setting. Please try again.",
       "masterToggle": "Enable notifications",
+      "secretConfigured": "Configured",
+      "secretReplace": "Replace",
+      "secretClear": "Clear",
       "channels": {
         "sectionLabel": "Channels",
         "toast": "In-app notification",

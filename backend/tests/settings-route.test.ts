@@ -4,7 +4,20 @@ import type { FastifyInstance } from 'fastify';
 import { DEFAULTS } from '../src/domain/settings/defaults.js';
 
 const RUN = !!process.env.RUN_DB_TESTS;
-const DEFAULT_NOTIFICATIONS = DEFAULTS.notifications;
+// GET never returns the channel secrets; it returns presence flags instead.
+const { webhookUrl: _w, ...DEFAULT_DISCORD } = DEFAULTS.notifications.channels.discord;
+const { apiKey: _a, ...DEFAULT_CALLMEBOT } = DEFAULTS.notifications.channels.callmebot;
+void _w;
+void _a;
+const DEFAULT_NOTIFICATIONS = {
+  ...DEFAULTS.notifications,
+  channels: {
+    ...DEFAULTS.notifications.channels,
+    discord: { ...DEFAULT_DISCORD, hasWebhookUrl: false },
+    callmebot: { ...DEFAULT_CALLMEBOT, hasApiKey: false },
+  },
+};
+const HOOK = 'https://discord.com/api/webhooks/123/abc-DEF_9';
 
 let app: FastifyInstance;
 let cookie: string;
@@ -126,6 +139,104 @@ describe.skipIf(!RUN)('/api/settings', () => {
       enabled: false,
       thresholds: { '7': 500 },
     });
+  });
+
+  // The test DB is shared across files (no users truncate), so never take
+  // "the first user" — resolve the logged-in one.
+  async function myId(): Promise<number> {
+    const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
+    return me.json().user.id as number;
+  }
+  async function rawJson(): Promise<string> {
+    const { db } = await import('../src/db/client.js');
+    const { userSettings } = await import('../src/db/schema.js');
+    const { eq } = await import('drizzle-orm');
+    const rows = await db.select().from(userSettings).where(eq(userSettings.userId, await myId()));
+    return JSON.stringify(rows.map((r) => r.settings));
+  }
+  const patch = (payload: unknown) =>
+    app.inject({ method: 'PATCH', url: '/api/settings', headers: { cookie }, payload: payload as never });
+  const get = () => app.inject({ method: 'GET', url: '/api/settings', headers: { cookie } });
+
+  it('discord webhook is stored encrypted and never returned', async () => {
+    const res = await patch({ notifications: { channels: { discord: { enabled: true, webhookUrl: HOOK } } } });
+    expect(res.statusCode).toBe(200);
+    for (const body of [res.body, (await get()).body]) {
+      expect(body).not.toContain(HOOK);
+      expect(body).not.toContain('webhookUrl"');
+      expect(body).not.toContain('webhookUrlEnc');
+    }
+    expect((await get()).json().settings.notifications.channels.discord).toEqual({
+      enabled: true, maxPerMinute: 0, hasWebhookUrl: true,
+    });
+    const raw = await rawJson();
+    expect(raw).not.toContain(HOOK);
+    expect(raw).toContain('webhookUrlEnc');
+  });
+
+  it('toggling enabled keeps the webhook; empty string clears it', async () => {
+    await patch({ notifications: { channels: { discord: { enabled: true, webhookUrl: HOOK } } } });
+    await patch({ notifications: { channels: { discord: { enabled: false } } } });
+    let d = (await get()).json().settings.notifications.channels.discord;
+    expect(d).toMatchObject({ enabled: false, hasWebhookUrl: true });
+    await patch({ notifications: { channels: { discord: { webhookUrl: '' } } } });
+    d = (await get()).json().settings.notifications.channels.discord;
+    expect(d.hasWebhookUrl).toBe(false);
+    expect(await rawJson()).not.toContain('webhookUrlEnc');
+  });
+
+  it('a patch to other notification fields keeps both secrets', async () => {
+    await patch({ notifications: { channels: {
+      discord: { webhookUrl: HOOK },
+      callmebot: { phone: '+33612345678', apiKey: 'sekret-key' },
+    } } });
+    await patch({ notifications: { privacy: { hideAmount: false } } });
+    const c = (await get()).json().settings.notifications.channels;
+    expect(c.discord.hasWebhookUrl).toBe(true);
+    expect(c.callmebot).toMatchObject({ phone: '+33612345678', hasApiKey: true });
+  });
+
+  it('callmebot apiKey: encrypted, never returned, kept on toggle, cleared by empty string', async () => {
+    const res = await patch({ notifications: { channels: { callmebot: { enabled: true, phone: '+33612345678', apiKey: 'sekret-key' } } } });
+    expect(res.body).not.toContain('sekret-key');
+    expect(res.json().settings.notifications.channels.callmebot).toEqual({
+      enabled: true, phone: '+33612345678', maxPerMinute: 0, hasApiKey: true,
+    });
+    const raw = await rawJson();
+    expect(raw).not.toContain('sekret-key');
+    expect(raw).toContain('apiKeyEnc');
+    await patch({ notifications: { channels: { callmebot: { enabled: false } } } });
+    expect((await get()).json().settings.notifications.channels.callmebot.hasApiKey).toBe(true);
+    await patch({ notifications: { channels: { callmebot: { apiKey: '' } } } });
+    expect((await get()).json().settings.notifications.channels.callmebot.hasApiKey).toBe(false);
+    expect(await rawJson()).not.toContain('apiKeyEnc');
+  });
+
+  it('still rejects an invalid discord webhook URL', async () => {
+    const res = await patch({ notifications: { channels: { discord: { webhookUrl: 'https://evil.example/x' } } } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('rejects client-supplied *Enc keys (strict input schema)', async () => {
+    const res = await patch({ notifications: { channels: { discord: { webhookUrlEnc: 'x' } } } });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('a leftover legacy plaintext row reads as set and is not exposed', async () => {
+    const { db } = await import('../src/db/client.js');
+    const { userSettings } = await import('../src/db/schema.js');
+    await db.insert(userSettings).values({
+      userId: await myId(),
+      settings: { notifications: { channels: { discord: { enabled: true, webhookUrl: HOOK, maxPerMinute: 0 } } } },
+    });
+    const res = await get();
+    expect(res.body).not.toContain(HOOK);
+    expect(res.json().settings.notifications.channels.discord.hasWebhookUrl).toBe(true);
+    // A later unrelated patch seals it.
+    await patch({ notifications: { privacy: { hideAmount: false } } });
+    const raw = await rawJson();
+    expect(raw).not.toContain(HOOK);
+    expect(raw).toContain('webhookUrlEnc');
   });
 
   it('PATCH with an out-of-range value returns 400', async () => {
