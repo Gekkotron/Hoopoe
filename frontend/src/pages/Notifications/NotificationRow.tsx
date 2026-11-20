@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { Notification, NotificationKind } from '../../../../shared/api-contracts.js';
+import type { JSX } from 'react';
 
 // Kinds with a dedicated filter chip (and thus a `filter.*` label) — 'test'
 // notifications have no chip and render without a kind label.

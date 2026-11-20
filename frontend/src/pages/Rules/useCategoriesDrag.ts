@@ -13,7 +13,7 @@ import { resolveDrop } from './dragNest';
 
 export function useCategoriesDrag(config: {
   cats: Category[];
-  tableRef: RefObject<HTMLTableElement>;
+  tableRef: RefObject<HTMLTableElement | null>;
   onReparent: (id: number, parentId: number | null) => void;
 }) {
   const { cats, tableRef, onReparent } = config;

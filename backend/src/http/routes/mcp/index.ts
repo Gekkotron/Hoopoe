@@ -15,7 +15,7 @@ const Envelope = z.object({
 });
 const Inner = z.object({
   op: z.string().min(1),
-  args: z.record(z.unknown()).default({}),
+  args: z.record(z.string(), z.unknown()).default({}),
   ts: z.number(),
 });
 const SKEW_MS = 120_000;

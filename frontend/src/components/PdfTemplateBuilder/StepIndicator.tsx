@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { STEP_ORDER, type Step } from './constants';
+import type { JSX } from 'react';
 
 interface Props {
   currentStep: Step;

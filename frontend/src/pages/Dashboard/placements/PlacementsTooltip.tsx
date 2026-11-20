@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { formatAmount, formatDate, formatMonth } from '../../../lib/format';
 import type { WindowPoint } from './series';
+import type { JSX } from 'react';
 
 interface Props {
   point: WindowPoint;

@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+import type { JSX } from 'react';
 
 export type BatchState =
   | { phase: 'running'; current: number; total: number; currentName: string }

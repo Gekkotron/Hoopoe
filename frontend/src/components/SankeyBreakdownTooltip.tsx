@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { LaidOutNode } from '../pages/Dashboard/sankey';
 import { formatAmount } from '../lib/format';
+import type { JSX } from 'react';
 
 interface Props {
   node: LaidOutNode;

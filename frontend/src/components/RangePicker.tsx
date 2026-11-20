@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
+import type { JSX } from 'react';
 
 export type RangeKey = '1m' | '3m' | '6m' | '12m' | 'all';
 

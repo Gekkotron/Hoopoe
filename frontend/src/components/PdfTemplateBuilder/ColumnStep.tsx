@@ -2,6 +2,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import { ZoneCanvas, type PageRect } from './ZoneCanvas.js';
 import { InfoTip } from '../InfoTip';
 import type { ReferenceRect } from './lib';
+import type { JSX } from 'react';
 
 interface Props {
   pngBase64: string;

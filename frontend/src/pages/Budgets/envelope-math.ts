@@ -88,8 +88,8 @@ export function computeTargetProgress(
   if (amount <= 0) return null;
   const bal = Number(row.balance);
   const asg = Number(row.assignment);
-  let pct = 0;
-  let label = '';
+  let pct: number;
+  let label: string;
   if (row.target.kind === 'monthly_recurring') {
     pct = asg / amount;
     label = t('envelopes.targetProgress.monthly', { amount: formatAmount(row.target.amount) });

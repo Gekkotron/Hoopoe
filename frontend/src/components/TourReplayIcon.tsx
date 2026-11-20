@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { useTips } from '../contexts/TipsContext';
 import { useTour } from '../contexts/TourContext';
 import { tipIdFor, type PageId } from '../tips/tours';
+import type { JSX } from 'react';
 
 // Small (?) button that reappears next to a page's title once the page's
 // tour has been dismissed, letting the user replay it on demand. Replay

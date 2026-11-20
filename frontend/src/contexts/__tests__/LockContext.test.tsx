@@ -31,6 +31,14 @@ function mount() {
   );
 }
 
+// Flush pending promises and zero-delay timers (react-query's notify
+// batching) without moving the clock. `runOnlyPendingTimersAsync()` jumps to
+// the last pending timer, which is react-query's 5-minute GC timer; React 19
+// arms the idle timer inside that same act(), so it would fire too.
+async function settle() {
+  await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   localStorage.clear();
@@ -49,7 +57,7 @@ afterEach(() => vi.useRealTimers());
 describe('LockContext', () => {
   it('locks after 5 minutes idle and mirrors privacy-on onto <html>', async () => {
     mount();
-    await act(async () => { await vi.runOnlyPendingTimersAsync(); }); // settle lock-status query
+    await settle(); // settle lock-status query
     expect(screen.getByTestId('locked').textContent).toBe('false');
     act(() => { vi.advanceTimersByTime(5 * 60 * 1000); });
     expect(screen.getByTestId('locked').textContent).toBe('true');
@@ -59,7 +67,7 @@ describe('LockContext', () => {
 
   it('lockNow() locks immediately', async () => {
     mount();
-    await act(async () => { await vi.runOnlyPendingTimersAsync(); });
+    await settle();
     fireEvent.click(screen.getByText('lock'));
     expect(screen.getByTestId('locked').textContent).toBe('true');
   });
@@ -74,7 +82,7 @@ describe('LockContext', () => {
     localStorage.setItem(LOCK_FLAG_KEY, '1');
     mount();
     fireEvent.click(screen.getByText('unlock'));
-    await act(async () => { await vi.runOnlyPendingTimersAsync(); });
+    await settle();
     expect(mockedApi).toHaveBeenCalledWith('/api/auth/verify', {
       method: 'POST', json: { password: 'pw' },
     });
@@ -88,7 +96,7 @@ describe('LockContext', () => {
       throw new Error(`unexpected api call: ${path}`);
     });
     mount();
-    await act(async () => { await vi.runOnlyPendingTimersAsync(); });
+    await settle();
     expect(screen.getByTestId('available').textContent).toBe('false');
     act(() => { vi.advanceTimersByTime(10 * 60 * 1000); });
     expect(screen.getByTestId('locked').textContent).toBe('false');
@@ -102,14 +110,14 @@ describe('LockContext', () => {
       throw new Error(`unexpected api call: ${path}`);
     });
     mount();
-    await act(async () => { await vi.runOnlyPendingTimersAsync(); });
+    await settle();
     await waitFor(() => expect(screen.getByTestId('locked').textContent).toBe('false'));
     expect(localStorage.getItem(LOCK_FLAG_KEY)).toBeNull();
   });
 
   it('activity resets the idle countdown', async () => {
     mount();
-    await act(async () => { await vi.runOnlyPendingTimersAsync(); });
+    await settle();
     act(() => { vi.advanceTimersByTime(4 * 60 * 1000); });
     act(() => { window.dispatchEvent(new MouseEvent('mousemove')); });
     act(() => { vi.advanceTimersByTime(4 * 60 * 1000); });

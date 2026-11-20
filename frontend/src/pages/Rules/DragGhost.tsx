@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import type { Category } from '../../api/types';
 import { kindBadgeClass, kindLabel } from '../../lib/categories';
+import type { JSX } from 'react';
 
 export function DragGhost({
   id,

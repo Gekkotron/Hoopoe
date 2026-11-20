@@ -6,6 +6,7 @@ import {
   type TestNotificationKind,
 } from '../../lib/notifications/hooks';
 import { requestWebPushPermission } from '../../lib/notifications/channels/webPush';
+import type { JSX } from 'react';
 
 function currentPermission(): NotificationPermission | 'unsupported' {
   if (typeof window === 'undefined' || !('Notification' in window)) return 'unsupported';

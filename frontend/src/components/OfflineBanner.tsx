@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import type { JSX } from 'react';
 
 // Rendered at the top of the layout whenever the browser reports itself
 // offline. The demo build runs entirely from the JavaScript bundle with no

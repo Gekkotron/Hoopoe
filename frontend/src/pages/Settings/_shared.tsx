@@ -1,4 +1,5 @@
 import { LoadingBlock } from '../../components/StateBlocks';
+import type { JSX } from 'react';
 
 // Four Settings tabs showed the exact same loading block before `useSettings`
 // resolved; this centralises the shape (max-w-xl shell + testid for e2e +

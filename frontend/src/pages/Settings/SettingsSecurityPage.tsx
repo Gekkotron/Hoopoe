@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation, Trans } from 'react-i18next';
 import { getMcpSettings, setMcpEnabled, setMcpReadOnly, generateMcpToken, revokeMcpToken } from '../../api/mcp';

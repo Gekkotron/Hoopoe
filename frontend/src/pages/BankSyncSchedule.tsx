@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useSettings } from '../lib/useSettings';
 import { formatDateTime } from '../lib/format';
 import type { BankSyncAutoInfo } from './SettingsBankSync-lib';
+import type { JSX } from 'react';
 
 // Auto-sync schedule block of the bank-sync tab: pick the retrieval hour
 // (stored in user settings, applied by the backend scheduler) and show the

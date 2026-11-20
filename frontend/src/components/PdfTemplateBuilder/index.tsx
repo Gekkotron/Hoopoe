@@ -10,6 +10,7 @@ import { ColumnStep } from './ColumnStep';
 import { PreviewSection } from './PreviewSection';
 import { StepNavigation } from './StepNavigation';
 import { usePdfTemplateBuilder } from './usePdfTemplateBuilder';
+import type { JSX } from 'react';
 
 interface Props {
   needsTemplate: PdfImportNeedsTemplate;

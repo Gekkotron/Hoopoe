@@ -2,6 +2,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import { PreviewTable, type PreviewRow } from './PreviewTable';
 import type { PreviewResult } from '../../api/pdf-templates.js';
 import { formatAmount, formatDate, amountSignClass } from '../../lib/format';
+import type { JSX } from 'react';
 
 interface Props {
   canSubmit: boolean;

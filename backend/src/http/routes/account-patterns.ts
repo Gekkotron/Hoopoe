@@ -6,6 +6,7 @@ import { accountFilenamePatterns } from '../../db/schema.js';
 import { pgError, parseId } from '../../lib/http.js';
 import { isAccountOwned } from '../../domain/ownership.js';
 import { userId } from '../plugins/auth.js';
+import { patchOf } from '../../lib/zodPatch.js';
 
 const CreateBody = z.object({
   pattern: z.string().trim().min(1).max(256),
@@ -13,7 +14,7 @@ const CreateBody = z.object({
   priority: z.coerce.number().int().min(0).max(1000).default(0),
 });
 
-const UpdateBody = CreateBody.partial();
+const UpdateBody = patchOf(CreateBody);
 
 export async function patternRoutes(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', app.requireAuth);

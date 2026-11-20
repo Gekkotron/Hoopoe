@@ -8,6 +8,7 @@ import {
   type BankConnection,
   type SyncConnectionResult,
 } from './SettingsBankSync-lib';
+import type { JSX } from 'react';
 
 // One card per bank connection: consent-lifecycle chip, per-account mapping
 // selects, sync/reconnect/disconnect actions, and the last sync's outcome.

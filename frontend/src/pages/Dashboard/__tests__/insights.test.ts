@@ -30,14 +30,14 @@ const REF = '2026-06';
 // buildInsights takes a real i18next `t` — rather than hand-rolling fake
 // French strings here (which would drift from the actual translation file),
 // spin up a standalone i18next instance loaded with the same fr/dashboard.json
-// bundle the app ships, and get a fixed translator off it. `initImmediate:
+// bundle the app ships, and get a fixed translator off it. `initAsync:
 // false` makes `.init()` resolve synchronously so no `await` is needed.
 const testI18n = i18next.createInstance();
 testI18n.init({
   lng: 'fr',
   resources: { fr: { dashboard: frDashboard } },
   interpolation: { escapeValue: false },
-  initImmediate: false,
+  initAsync: false,
 });
 const t = testI18n.getFixedT('fr', 'dashboard');
 

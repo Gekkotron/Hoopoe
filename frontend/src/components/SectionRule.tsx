@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, JSX } from 'react';
 
 // Top-of-section thin separator with a small-caps label. The visual belongs to
 // the `.section-rule` component class in index.css (`flex items-center gap-3`

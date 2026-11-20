@@ -1,5 +1,6 @@
 import type { Account, Category, Transaction } from '../../api/types';
 import { formatCategoryPath } from '../../lib/categories';
+import type { JSX } from 'react';
 
 // The extra rows that render below a transaction when it is expanded and
 // has split lines. One <tr> per split; column widths mirror the parent
