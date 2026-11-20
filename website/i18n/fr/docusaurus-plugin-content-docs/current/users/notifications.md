@@ -117,6 +117,11 @@ signale toute autre URL, et le serveur la refuse aussi : Hoopoe ne peut donc
 jamais être dirigé vers une machine de votre réseau local ni vers un autre
 site.
 
+L'URL du webhook et la clé API CallMeBot sont en écriture seule : elles sont
+stockées chiffrées et ne sont plus jamais affichées ; la page de réglages
+indique **Configuré** avec les actions **Remplacer** et **Effacer** à la
+place de la valeur.
+
 Traitez l'URL du webhook comme un mot de passe : quiconque la possède peut
 écrire dans ce salon. Elle reste sur votre serveur et ne sert qu'au moment où
 une notification part. Les messages passent par les mêmes masques

@@ -106,6 +106,10 @@ Only Discord's own webhook endpoints are accepted —
 URL, and the server rejects it too, so Hoopoe can never be pointed at a host
 on your LAN or at some other site.
 
+The webhook URL and the CallMeBot API key are write-only: they are stored
+encrypted and never shown again, so the settings page displays
+**Configured** with **Replace** and **Clear** actions instead of the value.
+
 Treat the webhook URL like a password: anyone who has it can post in that
 channel. It stays on your server and is only used when a notification
 fires. Messages go through the same **Confidentialité** masks as the other

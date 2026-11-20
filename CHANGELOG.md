@@ -13,6 +13,15 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
 ## [Unreleased]
 
 ### Security
+- **The Discord webhook URL and the CallMeBot API key are now encrypted at
+  rest and never returned.** They were stored in plaintext in the settings
+  JSON and sent back by `GET /api/settings`. They are now AES-256-GCM
+  encrypted under a key derived from `SESSION_SECRET` (like the other
+  secrets), the API only reports `hasWebhookUrl` / `hasApiKey`, and the
+  Settings page shows "Configured" with Replace / Clear instead of the
+  value. Existing plaintext values are encrypted automatically at the next
+  start, and a `SESSION_SECRET` rotation re-encrypts them.
+
 - **`/metrics` is disabled unless you configure it (behaviour change).**
   Without `METRICS_TOKEN` the endpoint used to be public and leaked
   cross-user counts and backup timestamps. It now returns 404 when

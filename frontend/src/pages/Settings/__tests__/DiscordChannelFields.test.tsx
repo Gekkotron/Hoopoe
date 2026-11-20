@@ -9,11 +9,11 @@ pinLocale('settings');
 
 const VALID = 'https://discord.com/api/webhooks/123456/abc-DEF_9';
 
-function prefs(enabled: boolean): NotificationPrefs {
+function prefs(enabled: boolean, hasWebhookUrl = false): NotificationPrefs {
   const n = DEFAULTS.notifications;
   return {
     ...n,
-    channels: { ...n.channels, discord: { enabled, webhookUrl: '', maxPerMinute: 0 } },
+    channels: { ...n.channels, discord: { enabled, hasWebhookUrl, maxPerMinute: 0 } },
   };
 }
 
@@ -46,5 +46,45 @@ describe('DiscordChannelFields', () => {
     await userEvent.type(screen.getByPlaceholderText(/discord\.com\/api\/webhooks/), 'https://example.com/hook');
     expect(screen.getByRole('alert')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /enregistrer/i })).toBeDisabled();
+  });
+
+  describe('when a webhook is already configured', () => {
+    it('shows Configured with Replace and Clear, and no URL input', () => {
+      render(<DiscordChannelFields prefs={prefs(true, true)} onPatch={vi.fn()} />);
+      expect(screen.getByText('Configuré')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Remplacer' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Effacer' })).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText(/discord\.com\/api\/webhooks/)).not.toBeInTheDocument();
+    });
+
+    it('saving without editing omits the secret', async () => {
+      const onPatch = vi.fn();
+      render(<DiscordChannelFields prefs={prefs(true, true)} onPatch={onPatch} />);
+      await userEvent.clear(screen.getByPlaceholderText('0'));
+      await userEvent.type(screen.getByPlaceholderText('0'), '7');
+      await userEvent.click(screen.getByRole('button', { name: /enregistrer/i }));
+      expect(onPatch).toHaveBeenCalledWith({ channels: { discord: { maxPerMinute: 7 } } });
+      expect(JSON.stringify(onPatch.mock.calls)).not.toContain('webhookUrl');
+    });
+
+    it('Replace reveals an empty input and sends the new URL', async () => {
+      const onPatch = vi.fn();
+      render(<DiscordChannelFields prefs={prefs(true, true)} onPatch={onPatch} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Remplacer' }));
+      const input = screen.getByPlaceholderText(/discord\.com\/api\/webhooks/);
+      expect(input).toHaveValue('');
+      await userEvent.type(input, VALID);
+      await userEvent.click(screen.getByRole('button', { name: /enregistrer/i }));
+      expect(onPatch).toHaveBeenCalledWith({
+        channels: { discord: { webhookUrl: VALID, maxPerMinute: 0 } },
+      });
+    });
+
+    it('Clear sends an empty webhookUrl', async () => {
+      const onPatch = vi.fn();
+      render(<DiscordChannelFields prefs={prefs(true, true)} onPatch={onPatch} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Effacer' }));
+      expect(onPatch).toHaveBeenCalledWith({ channels: { discord: { webhookUrl: '' } } });
+    });
   });
 });

@@ -47,6 +47,12 @@ try {
       process.exit(1);
     }
   }
+  // After any rotation, so legacy plaintext is sealed under the current key.
+  {
+    const { encryptLegacyNotificationSecrets } = await import('../domain/notifications/secrets.js');
+    const sealed = await encryptLegacyNotificationSecrets(env.SESSION_SECRET);
+    if (sealed > 0) app.log.warn({ rows: sealed }, 'encrypted legacy plaintext notification secrets');
+  }
   if (!process.env.OCR_LANG_PATH) app.log.warn('OCR_LANG_PATH not set — first OCR run will attempt CDN fetch (fine for dev, fails on LAN-only deploy).');
   await app.listen({ host: '0.0.0.0', port: env.PORT });
 } catch (err) {

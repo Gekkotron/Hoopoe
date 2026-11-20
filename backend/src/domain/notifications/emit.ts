@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import { accounts, categories, notifications, userSettings } from '../../db/schema.js';
 import { mergeSettings } from '../settings/schema.js';
+import { resolveNotificationSecrets } from './secrets.js';
 import { renderBody, renderFullDetail, renderTitle } from './render.js';
 import { broadcast } from './bus.js';
 import { sendCallMeBot } from './channels/callmebot.js';
@@ -78,6 +79,11 @@ export async function emitNotification(
     .from(userSettings).where(eq(userSettings.userId, userId));
   const prefs = mergeSettings(row?.settings ?? {}).notifications;
   if (!prefs.enabled) return null;
+  // Decrypt the channel secrets for sending only; a ciphertext that no
+  // longer opens leaves the channel unconfigured instead of failing dispatch.
+  const secrets = resolveNotificationSecrets(userId, row?.settings);
+  const discordPrefs = { ...prefs.channels.discord, webhookUrl: secrets.webhookUrl };
+  const callmebotPrefs = { ...prefs.channels.callmebot, apiKey: secrets.apiKey };
   const tk = triggerKey(kind);
   if (tk && !opts.bypassTriggerGate && !prefs.triggers[tk].enabled) return null;
 
@@ -116,10 +122,10 @@ export async function emitNotification(
     // only applies to automatic emissions.
     const sendOpts = { skipRateLimit: kind === 'test' };
     if (callmebotOn) {
-      void sendCallMeBot(prefs.channels.callmebot, privateTitle, privateBody, undefined, sendOpts);
+      void sendCallMeBot(callmebotPrefs, privateTitle, privateBody, undefined, sendOpts);
     }
     if (discordOn) {
-      void sendDiscord(prefs.channels.discord, privateTitle, privateBody, undefined, sendOpts);
+      void sendDiscord(discordPrefs, privateTitle, privateBody, undefined, sendOpts);
     }
   }
 

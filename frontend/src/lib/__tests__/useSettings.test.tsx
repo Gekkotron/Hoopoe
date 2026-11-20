@@ -96,7 +96,7 @@ describe('useSettings', () => {
         ...DEFAULTS.notifications,
         channels: {
           ...DEFAULTS.notifications.channels,
-          discord: { enabled: false, webhookUrl: 'https://discord.com/api/webhooks/1/abc', maxPerMinute: 5 },
+          discord: { enabled: false, hasWebhookUrl: true, maxPerMinute: 5 },
         },
       },
     };
@@ -110,7 +110,7 @@ describe('useSettings', () => {
     await waitFor(() => expect(result.current.settings.notifications.channels.discord.enabled).toBe(true));
     expect(result.current.settings.notifications.channels.discord).toEqual({
       enabled: true,
-      webhookUrl: 'https://discord.com/api/webhooks/1/abc',
+      hasWebhookUrl: true,
       maxPerMinute: 5,
     });
     expect(result.current.settings.notifications.channels.callmebot).toEqual(DEFAULTS.notifications.channels.callmebot);

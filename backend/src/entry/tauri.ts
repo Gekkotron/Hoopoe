@@ -306,8 +306,16 @@ try {
     console.warn(
       `[session-secret] migrated legacy install: totp=${counts.userTotp} ` +
         `bank-sync=${counts.bankSyncCredentials} backup=${counts.backupDestinations} ` +
-        `mcp=${counts.mcpKeys}`,
+        `mcp=${counts.mcpKeys} notifications=${counts.notificationSecrets}`,
     );
+  }
+
+  // Seal any legacy plaintext Discord webhook / CallMeBot key. Runs after the
+  // legacy re-encrypt pass so it always uses the final per-install secret.
+  {
+    const { encryptLegacyNotificationSecrets } = await import('../domain/notifications/secrets.js');
+    const sealed = await encryptLegacyNotificationSecrets(process.env.SESSION_SECRET);
+    if (sealed > 0) console.warn(`[notifications] encrypted legacy plaintext secrets for ${sealed} user(s)`);
   }
 
   await ensureLocalUser();
