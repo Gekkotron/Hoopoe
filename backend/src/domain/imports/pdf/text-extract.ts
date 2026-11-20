@@ -34,10 +34,14 @@ export async function extractText(buf: Buffer): Promise<PdfPageText[]> {
   const pdfjs = await loadPdfjs();
   const data = new Uint8Array(buf);
 
+  // pdfjs-dist v6 removed `isEvalSupported` (no eval-based font compilation
+  // remains), so no hardening option is needed here.
+  const loadingTask = pdfjs.getDocument({ data, useSystemFonts: true });
   let doc;
   try {
-    doc = await pdfjs.getDocument({ data, useSystemFonts: true, isEvalSupported: false }).promise;
+    doc = await loadingTask.promise;
   } catch (err: any) {
+    await loadingTask.destroy().catch(() => {});
     if (err?.name === 'PasswordException') throw new PdfEncryptedError('PDF is password-protected');
     throw err;
   }
@@ -76,7 +80,7 @@ export async function extractText(buf: Buffer): Promise<PdfPageText[]> {
     }
     return pages;
   } finally {
-    await doc.destroy();
+    await loadingTask.destroy();
   }
 }
 
