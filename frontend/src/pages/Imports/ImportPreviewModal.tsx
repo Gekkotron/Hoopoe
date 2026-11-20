@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import type { ImportPreview, ImportPreviewFuzzyMatch, ImportPreviewRow } from '../../api/imports';
 
 const COLLAPSE_LIMIT = 100;
@@ -178,7 +179,7 @@ function PreviewRowLine({
   onToggleMatch?: () => void;
   tickedSkips: Set<number>;
   toggleSkip: (idx: number) => void;
-  t: (k: string, o?: Record<string, unknown>) => string;
+  t: TFunction;
 }): JSX.Element {
   const rowClass =
     row.status === 'duplicate'

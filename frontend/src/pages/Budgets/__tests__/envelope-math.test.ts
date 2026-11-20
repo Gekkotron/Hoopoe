@@ -20,14 +20,14 @@ pinLocale('budgets');
 // fake French strings here (which would drift from the actual translation
 // file), spin up a standalone i18next instance loaded with the same
 // fr/budgets.json bundle the app ships, and get a fixed translator off it.
-// `initImmediate: false` makes `.init()` resolve synchronously so no
+// `initAsync: false` makes `.init()` resolve synchronously so no
 // `await` is needed. Mirrors Dashboard/__tests__/insights.test.ts.
 const testI18n = i18next.createInstance();
 testI18n.init({
   lng: 'fr',
   resources: { fr: { budgets: frBudgets } },
   interpolation: { escapeValue: false },
-  initImmediate: false,
+  initAsync: false,
 });
 const t = testI18n.getFixedT('fr', 'budgets');
 
