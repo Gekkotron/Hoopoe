@@ -5,6 +5,7 @@ import { count } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import { categories, users } from '../../db/schema.js';
 import { env } from '../../env.js';
+import { pgError } from '../../lib/http.js';
 
 // OWASP 2024 minimum for argon2id: 19 MiB memory, 2 iterations, parallelism 1.
 const ARGON2_OPTS = {
@@ -59,9 +60,9 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
         .values({ username, passwordHash })
         .returning({ id: users.id, username: users.username });
       user = inserted[0];
-    } catch (err: any) {
+    } catch (err) {
       // 23505 is unique_violation on the users_username_unique constraint.
-      if (err?.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({ error: 'username already taken' });
       }
       throw err;

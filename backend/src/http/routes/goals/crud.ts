@@ -3,7 +3,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../../db/client.js';
 import { accounts, savingsGoals } from '../../../db/schema.js';
 import { userId } from '../../plugins/auth.js';
-import { parseId, isPgError } from '../../../lib/http.js';
+import { parseId, pgError } from '../../../lib/http.js';
 import { CreateGoalBody, UpdateGoalBody } from './schemas.js';
 import { computeProjection } from './list.js';
 
@@ -102,7 +102,7 @@ export function registerCrud(app: FastifyInstance): void {
       const goal = await hydrateGoal(uid, created.id);
       return reply.code(201).send({ goal });
     } catch (err) {
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({ error: 'goal name already exists on this account' });
       }
       throw err;
@@ -143,7 +143,7 @@ export function registerCrud(app: FastifyInstance): void {
       const goal = await hydrateGoal(uid, id);
       return { goal };
     } catch (err) {
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({ error: 'goal name already exists on this account' });
       }
       throw err;

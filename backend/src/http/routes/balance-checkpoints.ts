@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import { accounts, balanceCheckpoints } from '../../db/schema.js';
-import { isPgError } from '../../lib/http.js';
+import { pgError } from '../../lib/http.js';
 import { userId } from '../plugins/auth.js';
 
 const decimal = z
@@ -132,7 +132,7 @@ export async function balanceCheckpointsRoutes(app: FastifyInstance): Promise<vo
         .returning();
       return reply.code(201).send({ checkpoint: serialize(created!) });
     } catch (err) {
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({
           error: 'checkpoint_exists',
           date: parsed.data.checkpointDate,
@@ -173,7 +173,7 @@ export async function balanceCheckpointsRoutes(app: FastifyInstance): Promise<vo
       if (!updated) return reply.code(404).send({ error: 'not found' });
       return { checkpoint: serialize(updated) };
     } catch (err) {
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({
           error: 'checkpoint_exists',
           date: parsed.data.checkpointDate,

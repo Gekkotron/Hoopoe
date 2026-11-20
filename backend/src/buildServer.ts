@@ -9,7 +9,7 @@ import { ZodError } from 'zod';
 import { env } from './env.js';
 import { pool, dbDriver } from './db/client.js';
 import { markDirty } from './db/snapshotScheduler.js';
-import { HttpError, isPgError } from './lib/http.js';
+import { HttpError, pgError } from './lib/http.js';
 import { authPlugin } from './http/plugins/auth.js';
 import { isLoopbackHost } from './http/loopbackHost.js';
 import { onboardingRoutes } from './http/routes/onboarding.js';
@@ -73,10 +73,9 @@ export async function build(opts?: { logger?: boolean }): Promise<FastifyInstanc
     if (err instanceof ZodError) {
       return reply.code(400).send({ error: 'invalid input', issues: err.issues });
     }
-    if (isPgError(err)) {
-      if (err.code === '23505') return reply.code(409).send({ error: 'conflict' });
-      if (err.code === '23503') return reply.code(400).send({ error: 'foreign key violation' });
-    }
+    const pgCode = pgError(err)?.code;
+    if (pgCode === '23505') return reply.code(409).send({ error: 'conflict' });
+    if (pgCode === '23503') return reply.code(400).send({ error: 'foreign key violation' });
     // Anything else with a validation payload / statusCode already set by
     // Fastify (validation, rate limit, 404 through setNotFoundHandler) — fall
     // through to Fastify's default rendering, which honors reply.statusCode.

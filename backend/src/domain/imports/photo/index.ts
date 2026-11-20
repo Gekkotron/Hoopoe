@@ -1,4 +1,4 @@
-import sharp from 'sharp';
+import sharp, { type Metadata } from 'sharp';
 import { db } from '../../../db/client.js';
 import { pdfImportDrafts } from '../../../db/schema.js';
 import { runOcrJob } from '../pdf/index.js';
@@ -61,7 +61,7 @@ export async function importPhoto(opts: {
   // bytes only prove the header; a truncated/corrupt body makes sharp throw,
   // which is a client error (400), not a server fault.
   let pngBuf: Buffer;
-  let meta: sharp.Metadata;
+  let meta: Metadata;
   try {
     pngBuf = await sharp(jpegBuf).png().toBuffer();
     meta = await sharp(pngBuf).metadata();

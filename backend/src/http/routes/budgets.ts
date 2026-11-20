@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { and, asc, eq } from 'drizzle-orm';
 import { db } from '../../db/client.js';
 import { accounts, categories, categoryBudgets } from '../../db/schema.js';
-import { isPgError, parseId } from '../../lib/http.js';
+import { pgError, parseId } from '../../lib/http.js';
 import { userId } from '../plugins/auth.js';
 
 const positiveDecimal = z
@@ -102,7 +102,7 @@ export async function budgetsRoutes(app: FastifyInstance): Promise<void> {
         .returning();
       return reply.code(201).send({ budget: serialize(created!) });
     } catch (err) {
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({
           error: 'budget_exists',
           categoryId: parsed.data.categoryId,
@@ -156,7 +156,7 @@ export async function budgetsRoutes(app: FastifyInstance): Promise<void> {
       if (!updated) return reply.code(404).send({ error: 'not found' });
       return { budget: serialize(updated) };
     } catch (err) {
-      if (isPgError(err) && err.code === '23505') {
+      if (pgError(err)?.code === '23505') {
         return reply.code(409).send({
           error: 'budget_exists',
           categoryId: existing.categoryId,

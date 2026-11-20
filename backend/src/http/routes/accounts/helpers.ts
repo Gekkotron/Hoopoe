@@ -1,1 +1,1 @@
-export { parseId, isPgError } from '../../../lib/http.js';
+export { parseId, pgError } from '../../../lib/http.js';
