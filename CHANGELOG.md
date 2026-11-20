@@ -12,6 +12,38 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
 
 ## [Unreleased]
 
+## [1.0.0-rc.11] - 2026-11-20
+
+Security and correctness release: the fixes from the 2026-11-19 audit,
+MCP read-only tokens, and the dependency majors (React 19, zod 4,
+react-router 7, pdfjs 6, Node 26 images).
+
+### Upgrading
+- **Back up before upgrading.** `update-release.sh` does it for you;
+  with `update.sh`, run `docker compose exec -T db sh -c 'pg_dump -U
+  "$POSTGRES_USER" -d "$POSTGRES_DB"' > backup.sql` first. Migration 0050
+  rewrites the import dedup keys, so going back to rc.10 means restoring
+  that backup into an empty database.
+- **`SESSION_SECRET` must not be the `.env.example` placeholder.** The
+  backend refuses to boot in production with any value containing
+  `replace-me`. If yours is the placeholder, move it to
+  `SESSION_SECRET_PREVIOUS=`, set `SESSION_SECRET=$(openssl rand -hex 32)`
+  and start once: 2FA, bank-sync, backup, MCP and notification secrets are
+  re-encrypted under the new key. Remove `SESSION_SECRET_PREVIOUS`
+  afterwards. Installs with their own random secret have nothing to do.
+- **The backend port is published on `127.0.0.1` only.** LAN clients,
+  the MCP server included, reach the API through the frontend's nginx at
+  `/api/*` (port 8000 by default). Point a remote MCP bridge at the
+  frontend port.
+- **`/metrics` returns 404** unless `METRICS_TOKEN` or
+  `METRICS_PUBLIC=true` is set.
+- **`TRUST_PROXY` no longer accepts a hop count**, and `AUTH_MODE=none`
+  is refused on the LAN/Docker entry (details below).
+- **Folder backup destinations must sit under `BACKUP_FOLDER_ROOT`**
+  (details below).
+- New optional switch: `ALLOW_REGISTRATION=false` closes sign-up once the
+  first account exists.
+
 ### Added
 - **MCP read-only scope.** MCP tokens can now be limited to read access.
   New users default to read-only: `create_transaction`,
@@ -19,6 +51,18 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
   by the backend) until **Allow changes** is ticked in Settings → MCP.
   Existing MCP users keep write access (migration 0051 backfills them).
   The switch never rotates or revokes the token.
+
+- **`ALLOW_REGISTRATION` switch.** Default `true`, so existing installs
+  behave as before. With `false`, once a user exists, new accounts are
+  refused (403 `registration_closed`) and the login page hides the
+  "Créer un compte" link. The first account (onboarding) is always allowed.
+
+- **Big-transaction alerts tell debits from credits.** Titles read "Big
+  debit" / "Big credit", debits and credits are batched separately per
+  account, and totals carry an explicit +/−.
+
+- **Support menu in the footer** linking to GitHub Sponsors, Patreon and
+  Buy Me a Coffee (EN + FR).
 
 ### Changed
 - **Folder backup destinations are confined to `BACKUP_FOLDER_ROOT`.** The
@@ -31,7 +75,55 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
   "destination not allowed"): move them under the root, or set
   `BACKUP_FOLDER_ROOT` in `.env` to a directory that contains them.
 
+- **`TRUST_PROXY` no longer accepts a hop count** (`1`, `2`, …). Fastify
+  5.12 treats a hop count as "trust nothing", which would silently put
+  every client back in one rate-limit bucket, so the backend now refuses to
+  boot with one. List the proxy addresses, CIDRs or presets instead (the
+  Docker Compose default `loopback,uniquelocal` is unaffected).
+
+- **Duplicate manual entries ask first.** Adding a transaction identical to
+  an existing one (same account, date, amount, label) now asks for
+  confirmation ("Ajouter quand même") before adding it.
+
 ### Security
+- **Accounts and categories are enforced per user.** Imports, import
+  preview, photo import, filename patterns, PDF template lookup and
+  transaction create / edit / bulk-categorize trusted the caller's
+  `accountId` / `categoryId`, so on a multi-user install one user could
+  write into another user's account or attach their categories. A foreign
+  id now answers exactly like a missing one.
+
+- **Per-client rate limits behind nginx.** The backend now trusts the
+  bundled nginx hop (`TRUST_PROXY=loopback,uniquelocal` in Compose), so
+  login, 2FA and registration throttling apply per device instead of one
+  shared bucket. nginx overwrites `X-Forwarded-For` instead of appending,
+  and the backend port is published on `127.0.0.1` only so it cannot be
+  reached around nginx.
+
+- **The `.env.example` `SESSION_SECRET` placeholder is refused in
+  production**, with a one-boot rotation path through
+  `SESSION_SECRET_PREVIOUS` (see Upgrading). `.env.example` now ships the
+  value empty, Compose fails fast when it is unset, and
+  `update-release.sh` stops before touching anything when `.env` still has
+  the placeholder.
+
+- **Changing your password or disabling 2FA signs out your other
+  sessions.** The current session stays. After 5 consecutive wrong 2FA
+  codes the account's 2FA step is locked for 15 minutes, whatever the
+  client address; recovery codes are not spent during the lock.
+
+- **CSV export neutralizes spreadsheet formulas.** A label, account,
+  category or note starting with `=`, `+`, `-`, `@`, tab or CR is prefixed
+  with `'`, so a transfer reference such as `=HYPERLINK(…)` no longer runs
+  when the export is opened in a spreadsheet. Amounts stay numbers.
+
+- **MCP hardening.** With `HOOPOE_STATEMENTS_DIR` set,
+  `reconcile_statement` only reads PDFs whose real path is inside it
+  (absolute paths, `../` and symlinks out are refused). Replayed request
+  envelopes are refused, and every authentication failure returns the same
+  `401 authentication failed`, so usernames with MCP enabled can no longer
+  be probed.
+
 - **Backup destinations can no longer target the host itself, hang, or inject
   commands.** WebDAV URLs and FTP hosts that resolve to loopback, link-local
   (including the 169.254.169.254 cloud metadata address) or unspecified
@@ -85,29 +177,59 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
 
 - An MCP token no longer implies write access to every transaction by
   default (see the read-only scope above).
-- **Production dependencies updated to clear the non-breaking npm
-  advisories.** Backend (fastify, @fastify/static, find-my-way, fast-uri…),
-  MCP bridge (@modelcontextprotocol/sdk, proxy-addr, body-parser…) and the
-  website's Docusaurus (3.10.2, all packages in lockstep). The remaining
-  advisories need major upgrades (drizzle-orm, sharp, zod, csv-parse,
-  exceljs, react-router 7) and are tracked one by one.
-- **Dependabot** now opens weekly grouped update PRs for npm (backend,
-  frontend, mcp, website), cargo, GitHub Actions and Docker base images.
-
-### Changed
-- **`TRUST_PROXY` no longer accepts a hop count** (`1`, `2`, …). Fastify
-  5.12 treats a hop count as "trust nothing", which would silently put
-  every client back in one rate-limit bucket, so the backend now refuses to
-  boot with one. List the proxy addresses, CIDRs or presets instead (the
-  Docker Compose default `loopback,uniquelocal` is unaffected).
 
 ### Fixed
+- **MCP works again end to end.** The bridge and the backend sealed
+  requests with different envelope labels, so every MCP call failed with
+  401. No token change is needed.
+
+- **Identical same-day transactions are no longer merged on import.** Two
+  real transactions sharing account, date, amount and label (two coffees at
+  the same price on the same day) used to collapse into one when the file
+  had no FITID. Each occurrence is now kept, and re-importing the same file
+  still adds nothing. Migration 0050 converts the existing keys in place;
+  backups taken before it restore correctly.
+
 - **Restoring a backup no longer breaks bank sync.** A restore used to
   empty the bank account mappings (single-user installs) or unmap them
   (multi-user), so connections stayed but synced nothing. The mappings are
   now kept and re-linked to the restored account with the same name. Links
   whose account name is not in the backup stay unmapped and are listed in
   the restore response as `unlinkedBankAccounts`.
+
+- **Reports.** The balance timeseries now includes transactions before the
+  selected window in its running total; the envelope report counts split
+  transactions per split category; invalid dates (2026-02-30, month 13)
+  answer 400 instead of 500 or a mislabelled period; the categories report
+  sorts totals numerically (-50 after -5).
+
+- **Imports.** camt skips pending entries and decodes entities / CDATA;
+  a zero debit no longer hides the credit in CSV / XLSX, and blank amount
+  rows are skipped; XLSX archives are bounded against zip bombs; OFX
+  decodes windows-1252 and the XML prolog encoding and accepts a leading
+  `+`; corrupt photo uploads answer 400; the watch folder ignores symlinks,
+  files still being copied and oversize files.
+
+- **Loans and goals.** The flat insurance amount of a loan is saved and
+  restored again (it was silently dropped, falling back to rate-based
+  insurance); amounts too large for the database answer 400 instead of 500.
+
+- **Recurring.** A detected series keeps its essential / discretionary tag
+  when detection reruns after an import, and detection is much faster on
+  large histories (it took about 8 s for 6,000 distinct merchants).
+
+### Dependencies
+- Backend: zod 4, pdfjs-dist 6, csv-parse 7, @fastify/multipart 10,
+  @fastify/compress 9, drizzle-orm 0.45, sharp 0.35, eslint 10.
+- Frontend: React 19, react-router 7, i18next 27, Vite / Vitest updates,
+  eslint 10.
+- MCP bridge: zod 4, TypeScript 7. Website: React 19, TypeScript 7.
+- Docker images build on Node 26; desktop crates and GitHub Actions
+  updated.
+- **Production dependencies updated to clear the non-breaking npm
+  advisories**, and **Dependabot** now opens weekly grouped update PRs for
+  npm (backend, frontend, mcp, website), cargo, GitHub Actions and Docker
+  base images.
 
 ## [1.0.0-rc.10] - 2026-10-20
 
