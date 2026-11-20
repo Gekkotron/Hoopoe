@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../../api/client';
 import { listCheckpoints, createCheckpoint, updateCheckpoint, deleteCheckpoint } from '../../api/checkpoints';
@@ -17,7 +18,7 @@ import { CheckpointRow } from './CheckpointRow';
 // component/hook scope.
 type ZodIssue = { path: (string | number)[]; message?: string };
 type CheckpointAction = 'add' | 'update' | 'delete';
-type Translate = (key: string, opts?: Record<string, unknown>) => string;
+type Translate = TFunction;
 
 function friendlyCheckpointError(err: unknown, action: CheckpointAction, t: Translate): string {
   if (err instanceof ApiError) {
