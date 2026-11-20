@@ -15,6 +15,7 @@ import { dataDir } from '../dataDir.js';
 import { acquireSingleInstanceLock, AlreadyRunningError } from './singleInstance.js';
 import { startParentWatchdog } from './parentWatchdog.js';
 import { runUnlockServer } from './unlockServer.js';
+import { LAUNCH_TOKEN_ENV, assertLaunchToken } from '../http/launchToken.js';
 import {
   readMarker, hasSnapshot, clearEncryption, readSnapshot, writeSnapshot,
 } from '../db/snapshotStore.js';
@@ -102,6 +103,18 @@ try {
     process.exit(1);
   }
   throw err;
+}
+
+// AUTH_MODE=none below makes every request the local user, so the desktop
+// entry refuses to boot without the shell's per-launch token. The app itself
+// (buildServer.ts) reads the same env var to install the guard.
+let launchToken: string;
+try {
+  launchToken = assertLaunchToken(process.env[LAUNCH_TOKEN_ENV]);
+} catch (err) {
+  process.stdout.write(`HOOPOE_FATAL=${fatalMessage(err)}\n`);
+  await releaseLock().catch(() => { /* best effort — process is exiting anyway */ });
+  process.exit(1);
 }
 
 process.env.DB_DRIVER = 'pglite';
@@ -195,7 +208,7 @@ try {
     // version of this file did) meant nothing could ever unlock, because
     // the port was never printed until *after* a correct password had
     // already been submitted to it.
-    const { port, unlocked } = await runUnlockServer({ dir });
+    const { port, unlocked } = await runUnlockServer({ dir, launchToken });
     process.stdout.write(`HOOPOE_PORT=${port}\n`);
     await writeFile(portFile, `${port}\n`, { mode: 0o600 });
     unlockedPort = port;

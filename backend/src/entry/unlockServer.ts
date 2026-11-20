@@ -15,6 +15,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import type { AddressInfo } from 'node:net';
 import { readSnapshot } from '../db/snapshotStore.js';
 import { isLoopbackHost } from '../http/loopbackHost.js';
+import { decideLaunchRequest } from '../http/launchToken.js';
 import { decryptBuffer, EnvelopeDecryptError } from '../lib/binaryEnvelope.js';
 
 const PAGE = `<!doctype html>
@@ -175,7 +176,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
-export function runUnlockServer(opts: { dir: string; port?: number }): Promise<UnlockBinding> {
+export function runUnlockServer(opts: { dir: string; port?: number; launchToken?: string }): Promise<UnlockBinding> {
   return new Promise((resolveBinding, rejectBinding) => {
     let resolveUnlocked!: (outcome: UnlockOutcome) => void;
     let rejectUnlocked!: (err: unknown) => void;
@@ -203,6 +204,24 @@ export function runUnlockServer(opts: { dir: string; port?: number }): Promise<U
       if (!isLoopbackHost(req.headers.host)) {
         sendJson(res, 403, { error: 'forbidden host' });
         return;
+      }
+
+      if (opts.launchToken) {
+        const decision = decideLaunchRequest(method, url, req.headers.cookie, opts.launchToken);
+        if (decision.action === 'redirect') {
+          res.writeHead(302, {
+            Location: decision.location,
+            'Set-Cookie': decision.setCookie,
+            'Cache-Control': 'no-store',
+            'Content-Length': 0,
+          });
+          res.end();
+          return;
+        }
+        if (decision.action === 'deny') {
+          sendJson(res, 403, { error: 'forbidden' });
+          return;
+        }
       }
 
       if (method === 'GET' && url === '/') {

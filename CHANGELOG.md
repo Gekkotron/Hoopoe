@@ -47,6 +47,19 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
   refused, authentication failed, timed out, destination not allowed,
   unexpected response) instead of upstream error text, which is logged
   server-side only.
+
+- **The desktop app now authenticates its own window with a per-launch
+  token.** The desktop backend answers every request as the local user, so
+  any other process or OS user on the machine could call it through the
+  loopback port. The shell now generates a random 256-bit token on every
+  launch, passes it to the backend through the `HOOPOE_LAUNCH_TOKEN`
+  environment variable (not the command line) and opens its window at
+  `/__launch?token=...`, which sets an `HttpOnly`, `SameSite=Strict` session
+  cookie. Every other request without that cookie gets 403. `/api/mcp`
+  keeps its own envelope authentication and is not affected. The desktop
+  backend refuses to start without the token; the LAN/Docker server is
+  unchanged.
+
 - **The Discord webhook URL and the CallMeBot API key are now encrypted at
   rest and never returned.** They were stored in plaintext in the settings
   JSON and sent back by `GET /api/settings`. They are now AES-256-GCM

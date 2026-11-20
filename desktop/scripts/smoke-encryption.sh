@@ -36,6 +36,9 @@ BACKEND_DIR="$REPO_ROOT/backend"
 
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/hoopoe-smoke-XXXXXX")"
 DATA_DIR="$WORK_DIR/data"
+# The desktop entry refuses to boot without a per-launch token and answers 403
+# to any request lacking the matching cookie (see backend/src/http/launchToken.ts).
+LAUNCH_TOKEN="$(printf '%064d' 7)"
 mkdir -p "$DATA_DIR"
 
 PASSWORD="smoke-pass-123"
@@ -136,7 +139,7 @@ json_array_field() {
 http_get() {
   # http_get <url>
   local resp
-  resp=$(curl -s -w '\n%{http_code}' "$1")
+  resp=$(curl -s -w '\n%{http_code}' -H "Cookie: hoopoe_launch=$LAUNCH_TOKEN" "$1")
   printf '%s' "$resp" | tail -n1
   printf '\n'
   printf '%s' "$resp" | sed '$d'
@@ -145,7 +148,7 @@ http_get() {
 http_post() {
   # http_post <url> <json-body>
   local resp
-  resp=$(curl -s -w '\n%{http_code}' -X POST -H 'Content-Type: application/json' -d "$2" "$1")
+  resp=$(curl -s -w '\n%{http_code}' -X POST -H "Cookie: hoopoe_launch=$LAUNCH_TOKEN" -H 'Content-Type: application/json' -d "$2" "$1")
   printf '%s' "$resp" | tail -n1
   printf '\n'
   printf '%s' "$resp" | sed '$d'
@@ -168,10 +171,10 @@ start_sidecar() {
       cd "$SIDECAR_DIR" || exit 1
       node_bin="./node"
       [ -x "./node.exe" ] && node_bin="./node.exe"
-      exec env DATA_DIR="$DATA_DIR" "$node_bin" entry.js
+      exec env DATA_DIR="$DATA_DIR" HOOPOE_LAUNCH_TOKEN="$LAUNCH_TOKEN" "$node_bin" entry.js
     else
       cd "$BACKEND_DIR" || exit 1
-      exec env DATA_DIR="$DATA_DIR" node --import tsx src/entry/tauri.ts
+      exec env DATA_DIR="$DATA_DIR" HOOPOE_LAUNCH_TOKEN="$LAUNCH_TOKEN" node --import tsx src/entry/tauri.ts
     fi
   ) >"$logfile" 2>&1 &
   CUR_PID=$!
