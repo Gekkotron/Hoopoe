@@ -12,6 +12,7 @@ import {
   restoreBudgets,
   restoreCategoryTree,
   restoreFilenamePatterns,
+  relinkBankAccounts,
   restoreRules,
 } from './restore-steps.js';
 import {
@@ -58,9 +59,10 @@ export function registerRestoreRoute(app: FastifyInstance): void {
     const result = await db.transaction(async (tx) => {
       // TRUNCATE when solo, per-user DELETEs otherwise — see wipe.ts for the
       // PGlite busy-wait rationale.
-      await wipeUserData(tx, uid);
+      const bankLinks = await wipeUserData(tx, uid);
 
       const accountIdByName = await restoreAccounts(tx, uid, dump.accounts);
+      const unlinkedBankAccounts = await relinkBankAccounts(tx, bankLinks, accountIdByName);
       const cats = await restoreCategoryTree(tx, uid, dump.categories);
       await restoreFilenamePatterns(tx, uid, dump.accountFilenamePatterns, accountIdByName);
       const rulesResult = await restoreRules(tx, uid, dump.rules, cats);
@@ -106,6 +108,7 @@ export function registerRestoreRoute(app: FastifyInstance): void {
           savingsGoals: goals.goalsSkipped,
           savingsGoalEvents: goals.eventsSkipped,
         },
+        unlinkedBankAccounts,
       };
     });
 

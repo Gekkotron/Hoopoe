@@ -47,6 +47,14 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
 - An MCP token no longer implies write access to every transaction by
   default (see the read-only scope above).
 
+### Fixed
+- **Restoring a backup no longer breaks bank sync.** A restore used to
+  empty the bank account mappings (single-user installs) or unmap them
+  (multi-user), so connections stayed but synced nothing. The mappings are
+  now kept and re-linked to the restored account with the same name. Links
+  whose account name is not in the backup stay unmapped and are listed in
+  the restore response as `unlinkedBankAccounts`.
+
 ## [1.0.0-rc.10] - 2026-10-20
 
 Re-cut of rc.9 — same product. rc.9 was never published: its Release

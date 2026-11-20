@@ -5,6 +5,8 @@ import {
   accountValuations,
   accountFilenamePatterns,
   balanceCheckpoints,
+  bankConnectionAccounts,
+  bankConnections,
   categories,
   categoryBudgets,
   fileImports,
@@ -23,6 +25,38 @@ import {
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+// A bank_connection_accounts row as it stood before the wipe, plus the name of
+// the Hoopoe account it was mapped to. The restore re-links by that name.
+export type BankLinkSnapshot = {
+  id: number;
+  connectionId: number;
+  bankAccountUid: string;
+  iban: string | null;
+  name: string | null;
+  currency: string | null;
+  lastSyncedAt: Date | null;
+  previousAccountName: string | null;
+};
+
+async function snapshotBankLinks(tx: Tx, uid: number): Promise<BankLinkSnapshot[]> {
+  const rows = await tx
+    .select({
+      id: bankConnectionAccounts.id,
+      connectionId: bankConnectionAccounts.connectionId,
+      bankAccountUid: bankConnectionAccounts.bankAccountUid,
+      iban: bankConnectionAccounts.iban,
+      name: bankConnectionAccounts.name,
+      currency: bankConnectionAccounts.currency,
+      lastSyncedAt: bankConnectionAccounts.lastSyncedAt,
+      previousAccountName: accounts.name,
+    })
+    .from(bankConnectionAccounts)
+    .innerJoin(bankConnections, eq(bankConnections.id, bankConnectionAccounts.connectionId))
+    .leftJoin(accounts, eq(accounts.id, bankConnectionAccounts.accountId))
+    .where(eq(bankConnections.userId, uid));
+  return rows;
+}
+
 // Restore's REPLACE-semantics wipe.
 //
 // Sole-user installs (the desktop app always; solo LAN setups) wipe via
@@ -33,9 +67,28 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 // relation's storage without inspecting tuples, so it is immune. The list
 // mirrors what the DELETE path removes directly or via FK cascade
 // (recurring_series husks additionally go — they'd only survive as empty
-// shells with dead transaction links). user_settings and
-// envelope_month_holds reference only users and are kept by both paths.
-export async function wipeUserData(tx: Tx, uid: number): Promise<void> {
+// shells with dead transaction links).
+//
+// Bank links: bank_connection_accounts.account_id is ON DELETE SET NULL, so
+// the DELETE path nulls the mapping of the rows it keeps, while a
+// TRUNCATE ... CASCADE would silently empty the whole table and leave bank
+// connections with no accounts (sync then does nothing). Both paths therefore
+// snapshot the caller's links (with the mapped account's name) up front, and
+// the restore re-links them by account name once accounts are re-inserted
+// (see relinkBankAccounts). The TRUNCATE lists bank_connection_accounts
+// explicitly and re-inserts the snapshot (same ids) rather than switching to
+// UPDATE/DELETE, which would reintroduce the PGlite busy-wait above.
+//
+// The TRUNCATE has no CASCADE: every table with an FK into the truncated set
+// must be listed, and Postgres errors out if a new one is forgotten instead of
+// silently emptying it. Audit of FKs into accounts/categories/transactions/
+// rules/etc.: every referencing table is in the list except
+// bank_connection_accounts (handled above, now listed). Tables referencing
+// only users (user_settings, notifications, fx_rates, envelope_month_holds,
+// backup_destinations, bank_connections, bank_sync_credentials) are untouched
+// by both paths.
+export async function wipeUserData(tx: Tx, uid: number): Promise<BankLinkSnapshot[]> {
+  const bankLinks = await snapshotBankLinks(tx, uid);
   const [userCount] = await tx.select({ n: sql<number>`count(*)::int` }).from(users);
   if ((userCount?.n ?? 0) === 1) {
     await tx.execute(sql`TRUNCATE
@@ -49,8 +102,14 @@ export async function wipeUserData(tx: Tx, uid: number): Promise<void> {
       pdf_import_drafts, pdf_statement_templates,
       transactions, file_imports, rules,
       balance_checkpoints, category_budgets, account_filename_patterns,
-      categories, accounts CASCADE`);
-    return;
+      bank_connection_accounts,
+      categories, accounts`);
+    if (bankLinks.length > 0) {
+      await tx.insert(bankConnectionAccounts).values(
+        bankLinks.map(({ previousAccountName: _name, ...row }) => ({ ...row, accountId: null })),
+      );
+    }
+    return bankLinks;
   }
 
   // Wipe only THIS user's rows, in reverse dependency order.
@@ -87,4 +146,6 @@ export async function wipeUserData(tx: Tx, uid: number): Promise<void> {
   await tx.delete(accountFilenamePatterns).where(eq(accountFilenamePatterns.userId, uid));
   await tx.delete(categories).where(eq(categories.userId, uid));
   await tx.delete(accounts).where(eq(accounts.userId, uid));
+  // bank_connection_accounts rows survive with account_id nulled by the FK.
+  return bankLinks;
 }
