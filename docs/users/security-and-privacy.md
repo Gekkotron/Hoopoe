@@ -51,7 +51,11 @@ firewall or VPN (see
 **Desktop path.** The Tauri build runs with `AUTH_MODE=none`: no cookies,
 no login screen, a single hard-coded local user is seeded on first boot.
 That trade-off is safe because the backend never leaves `127.0.0.1` — no
-other process on the LAN can reach it.
+other process on the LAN can reach it. As a second guard, in this mode
+the backend only answers requests whose `Host` header is `127.0.0.1`,
+`localhost` or `[::1]` (a web page that points its own hostname at
+`127.0.0.1` gets a 403), and the LAN/Docker server refuses to start with
+`AUTH_MODE=none` at all.
 
 ## Screen lock
 

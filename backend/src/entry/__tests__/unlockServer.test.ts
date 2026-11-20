@@ -24,6 +24,25 @@ describe('runUnlockServer', () => {
     await rm(dir, { recursive: true, force: true });
   });
 
+  it('rejects a non-loopback Host header with 403', async () => {
+    const { port } = await runUnlockServer({ dir });
+    const http = await import('node:http');
+    const status = await new Promise<number>((resolve, reject) => {
+      const r = http.request(
+        { host: '127.0.0.1', port, path: '/health', headers: { host: 'evil.example' } },
+        (res) => { res.resume(); resolve(res.statusCode ?? 0); },
+      );
+      r.on('error', reject);
+      r.end();
+    });
+    expect(status).toBe(403);
+    await fetch(`http://127.0.0.1:${port}/api/unlock`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: PASSWORD }),
+    });
+  });
+
   it('resolves with a bound port before any password is posted, while /health already works', async () => {
     // This is exactly the chicken-and-egg bug the split { port, unlocked }
     // interface exists to fix: an earlier version of runUnlockServer only

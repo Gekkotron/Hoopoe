@@ -11,6 +11,7 @@ import { pool, dbDriver } from './db/client.js';
 import { markDirty } from './db/snapshotScheduler.js';
 import { HttpError, isPgError } from './lib/http.js';
 import { authPlugin } from './http/plugins/auth.js';
+import { isLoopbackHost } from './http/loopbackHost.js';
 import { onboardingRoutes } from './http/routes/onboarding.js';
 import { authRoutes } from './http/routes/auth.js';
 import { totpRoutes } from './http/routes/auth/totp.js';
@@ -150,6 +151,16 @@ export async function build(opts?: { logger?: boolean }): Promise<FastifyInstanc
     if (reply.statusCode >= 400) return;
     markDirty();
   });
+
+  // none mode answers every request as the local user, so only loopback Host
+  // names are served (blocks DNS rebinding). Session mode is untouched.
+  if (env.AUTH_MODE === 'none') {
+    app.addHook('onRequest', async (req, reply) => {
+      if (!isLoopbackHost(req.headers.host)) {
+        return reply.code(403).send({ error: 'forbidden host' });
+      }
+    });
+  }
 
   await app.register(metricsPlugin);
   await app.register(authPlugin);
