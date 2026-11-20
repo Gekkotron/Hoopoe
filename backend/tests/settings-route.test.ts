@@ -141,10 +141,17 @@ describe.skipIf(!RUN)('/api/settings', () => {
     });
   });
 
+  // The test DB is shared across files (no users truncate), so never take
+  // "the first user" — resolve the logged-in one.
+  async function myId(): Promise<number> {
+    const me = await app.inject({ method: 'GET', url: '/api/auth/me', headers: { cookie } });
+    return me.json().user.id as number;
+  }
   async function rawJson(): Promise<string> {
     const { db } = await import('../src/db/client.js');
     const { userSettings } = await import('../src/db/schema.js');
-    const rows = await db.select().from(userSettings);
+    const { eq } = await import('drizzle-orm');
+    const rows = await db.select().from(userSettings).where(eq(userSettings.userId, await myId()));
     return JSON.stringify(rows.map((r) => r.settings));
   }
   const patch = (payload: unknown) =>
@@ -217,10 +224,9 @@ describe.skipIf(!RUN)('/api/settings', () => {
 
   it('a leftover legacy plaintext row reads as set and is not exposed', async () => {
     const { db } = await import('../src/db/client.js');
-    const { userSettings, users } = await import('../src/db/schema.js');
-    const [u] = await db.select().from(users);
+    const { userSettings } = await import('../src/db/schema.js');
     await db.insert(userSettings).values({
-      userId: u!.id,
+      userId: await myId(),
       settings: { notifications: { channels: { discord: { enabled: true, webhookUrl: HOOK, maxPerMinute: 0 } } } },
     });
     const res = await get();
