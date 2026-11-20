@@ -1,6 +1,7 @@
 // requires Postgres — run with RUN_DB_TESTS=1
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
+import { refreshEnvForTests } from '../src/env.js';
 
 const RUN = !!process.env.RUN_DB_TESTS;
 
@@ -8,11 +9,18 @@ let app: FastifyInstance;
 
 describe.skipIf(!RUN)('/metrics endpoint', () => {
   beforeAll(async () => {
+    // /metrics is disabled unless a token or METRICS_PUBLIC is set; this file
+    // exercises the open endpoint (gating itself: metrics-gating.test.ts).
+    delete process.env.METRICS_TOKEN;
+    process.env.METRICS_PUBLIC = 'true';
+    refreshEnvForTests();
     const { buildApp } = await import('./helpers/build-app.js');
     app = await buildApp();
   });
 
   afterAll(async () => {
+    delete process.env.METRICS_PUBLIC;
+    refreshEnvForTests();
     await app.close();
   });
 

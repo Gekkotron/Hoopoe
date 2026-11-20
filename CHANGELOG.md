@@ -12,6 +12,15 @@ exact format (`## [X.Y.Z] - YYYY-MM-DD`).
 
 ## [Unreleased]
 
+### Security
+- **`/metrics` is disabled unless you configure it (behaviour change).**
+  Without `METRICS_TOKEN` the endpoint used to be public and leaked
+  cross-user counts and backup timestamps. It now returns 404 when
+  `METRICS_TOKEN` is unset. Unauthenticated scrapers will get 404 after
+  upgrading: set `METRICS_TOKEN` and send `Authorization: Bearer <token>`,
+  or set `METRICS_PUBLIC=true` to keep the old open endpoint (ignored when
+  a token is set).
+
 ## [1.0.0-rc.10] - 2026-10-20
 
 Re-cut of rc.9 — same product. rc.9 was never published: its Release

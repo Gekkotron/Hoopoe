@@ -51,7 +51,11 @@ export const Env = z
     // When empty, the endpoint stays open — a startup warning is logged so
     // operators know to configure it before exposing the app beyond the LAN.
     // Prometheus scrapers can pass the token via `bearer_token`/`bearer_token_file`.
-    METRICS_TOKEN: z.string().min(16).optional(),
+    METRICS_TOKEN: z.preprocess(emptyAsUndefined, z.string().min(16).optional()),
+    // /metrics is only served when METRICS_TOKEN is set. With no token it is
+    // disabled (404) unless this is true, which restores the old open
+    // endpoint for LAN-only scrape targets. Ignored when a token is set.
+    METRICS_PUBLIC: boolish.default(false),
     // Which reverse-proxy hops may set the client address via X-Forwarded-For
     // (see lib/trustProxy.ts). Off by default: the desktop sidecar and a bare
     // `npm run dev` have no proxy, and trusting the header there would let any
