@@ -84,7 +84,10 @@ Replace the placeholders:
   When set, `reconcile_statement` resolves a **bare filename** (e.g.
   `april.pdf`) against it, so you don't have to type a full absolute path. A
   leading `~` is expanded, and if a file isn't found the error lists the `.pdf`
-  files actually in the folder.
+  files actually in the folder. It is also a boundary: once set, the tool
+  only reads PDFs inside this folder (absolute paths, `../` and symlinks that
+  lead elsewhere are refused), so a document the model reads cannot steer it
+  into uploading other files. Setting it is recommended.
 
 All three are required; the server refuses to start if any is missing.
 

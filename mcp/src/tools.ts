@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { statSync, readFileSync, readdirSync } from 'node:fs';
+import { statSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { isAbsolute, join } from 'node:path';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 
 interface RpcLike { rpc(op: string, args: Record<string, unknown>): Promise<unknown>; }
 
@@ -18,18 +18,48 @@ function expandTilde(p: string): string {
   return p;
 }
 
+function isInside(base: string, target: string): boolean {
+  const rel = relative(base, target);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
 // Resolve the caller-supplied path. A bare filename (or any relative path) is
 // resolved against `statementsDir` when configured, so the model can pass just
-// "april.pdf" instead of a full absolute path. Absolute paths pass through.
+// "april.pdf" instead of a full absolute path.
+//
+// With `statementsDir` set, the file must live inside it: the model takes
+// paths from untrusted text (a prompt-injected document could ask for
+// ~/.ssh/… renamed .pdf), so absolute paths, `~/`, `../` and symlinks that
+// leave the directory are refused. The check runs on real paths when the
+// file exists, and lexically otherwise so a probe outside the directory
+// can't tell existing files from missing ones. Without `statementsDir`,
+// any path is accepted, as before.
 function resolvePdfPath(input: string, statementsDir?: string): string {
   const p = expandTilde(input);
-  if (!isAbsolute(p) && statementsDir) return join(expandTilde(statementsDir), p);
-  return p;
+  if (!statementsDir) return p;
+
+  const dir = resolve(expandTilde(statementsDir));
+  const candidate = isAbsolute(p) ? resolve(p) : resolve(dir, p);
+  let realDir: string;
+  try {
+    realDir = realpathSync(dir);
+  } catch {
+    throw new Error(`HOOPOE_STATEMENTS_DIR not found: ${dir}`);
+  }
+  let real: string;
+  try {
+    real = realpathSync(candidate);
+  } catch {
+    if (!isInside(dir, candidate)) throw new Error(`path is outside HOOPOE_STATEMENTS_DIR: ${input}`);
+    return candidate; // missing; statSync below reports it with the hint
+  }
+  if (!isInside(realDir, real)) throw new Error(`path is outside HOOPOE_STATEMENTS_DIR: ${input}`);
+  return real;
 }
 
 export function readPdfBase64(input: string, statementsDir?: string): string {
   const path = resolvePdfPath(input, statementsDir);
-  if (!path.toLowerCase().endsWith('.pdf')) throw new Error(`not a .pdf file: ${path}`);
+  if (!path.toLowerCase().endsWith('.pdf')) throw new Error(`not a .pdf file: ${input}`);
   let stat;
   try {
     stat = statSync(path);

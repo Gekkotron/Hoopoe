@@ -114,4 +114,30 @@ describe.skipIf(!RUN)('POST /api/mcp/rpc', () => {
     expect((await call('list_accounts', {})).statusCode).toBe(401);
     await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: { enabled: true } });
   });
+
+  it('a replayed envelope is refused', async () => {
+    const { nonce, ct } = encryptEnvelope(key, aad('req'), JSON.stringify({ op: 'list_accounts', args: {}, ts: Date.now() }));
+    const send = () => app.inject({ method: 'POST', url: '/api/mcp/rpc', payload: { user: USER, v: 1, nonce, ct } });
+    expect((await send()).statusCode).toBe(200);
+    const again = await send();
+    expect(again.statusCode).toBe(401);
+    expect(again.json()).toEqual({ error: 'authentication failed' });
+  });
+
+  it('every authentication failure has the same body (no username oracle)', async () => {
+    const ghost = encryptEnvelope(key, 'hoopoe-mcp-v1|ghost|req', JSON.stringify({ op: 'list_accounts', args: {}, ts: Date.now() }));
+    const unknown = await app.inject({ method: 'POST', url: '/api/mcp/rpc', payload: { user: 'ghost', v: 1, ...ghost } });
+    const wrong = deriveContentKey(Buffer.alloc(32, 9));
+    const bad = encryptEnvelope(wrong, aad('req'), JSON.stringify({ op: 'list_accounts', args: {}, ts: Date.now() }));
+    const badTag = await app.inject({ method: 'POST', url: '/api/mcp/rpc', payload: { user: USER, v: 1, ...bad } });
+    const stale = await call('list_accounts', {}, Date.now() - 200_000);
+    await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: { enabled: false } });
+    const disabled = await call('list_accounts', {});
+    await app.inject({ method: 'PUT', url: '/api/settings/mcp', headers: { cookie }, payload: { enabled: true } });
+
+    for (const res of [unknown, badTag, stale, disabled]) {
+      expect(res.statusCode).toBe(401);
+      expect(res.json()).toEqual({ error: 'authentication failed' });
+    }
+  });
 });
