@@ -25,7 +25,7 @@
     "@fastify/rate-limit": "^10.2.2",
     "@fastify/session": "^11.1.6",
     "@fastify/static": "^10.1.0",
-    "@napi-rs/canvas": "^0.1.55",
+    "@napi-rs/canvas": "^1.1.1",
     "@node-rs/argon2": "^2.2.2",
     "content-disposition": "^2.0.1",
     "csv-parse": "^7.0.3",
