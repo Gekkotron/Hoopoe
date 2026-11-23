@@ -53,7 +53,7 @@
     "drizzle-kit": "^0.31.11",
     "eslint": "10.15.0",
     "form-data": "^4.0.6",
-    "globals": "15.15.0",
+    "globals": "17.14.0",
     "pdfkit": "^0.20.2",
     "tsx": "^4.23.15",
     "typescript": "^5.7.2",
